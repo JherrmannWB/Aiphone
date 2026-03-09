@@ -164,7 +164,7 @@ const EXERCISE_RULES = {
 const USER_MAXES_DEFAULT = {
   bench: "",
   squat: "",
-  hinge: "",
+  deadlift: "",
   press: "",
   pull: ""
 };
@@ -179,7 +179,7 @@ const BODY_METRICS_DEFAULT = {
 const POWER_LIFT_GROUPS = {
   bench: ["Barbell Bench Press", "Incline Barbell Press", "Dips"],
   squat: ["Back Squat", "Front Squat", "Bulgarian Split Squat"],
-  hinge: ["Deadlift", "Romanian Deadlift", "Hip Thrust"],
+  deadlift: ["Deadlift", "Romanian Deadlift", "Hip Thrust"],
   press: ["Standing Barbell Shoulder Press", "Arnold Press"],
   pull: ["Barbell Row", "Chest Supported Row", "Lat Pulldown", "Seated Row", "Pullups"]
 };
@@ -524,19 +524,19 @@ function calcPowerData() {
 
   const autoBench = bestLiftForNames(workouts, POWER_LIFT_GROUPS.bench);
   const autoSquat = bestLiftForNames(workouts, POWER_LIFT_GROUPS.squat);
-  const autoHinge = bestLiftForNames(workouts, POWER_LIFT_GROUPS.hinge);
+  const autoDeadlift = bestLiftForNames(workouts, POWER_LIFT_GROUPS.deadlift);
   const autoPress = bestLiftForNames(workouts, POWER_LIFT_GROUPS.press);
   const autoPull = bestLiftForNames(workouts, POWER_LIFT_GROUPS.pull);
 
   const userBench = parseNum(state.userMaxes?.bench);
   const userSquat = parseNum(state.userMaxes?.squat);
-  const userHinge = parseNum(state.userMaxes?.hinge);
+  const userDeadlift = parseNum(state.userMaxes?.deadlift || state.userMaxes?.hinge);
   const userPress = parseNum(state.userMaxes?.press);
   const userPull = parseNum(state.userMaxes?.pull);
 
   const bestBench = Math.max(userBench, autoBench);
   const bestSquat = Math.max(userSquat, autoSquat);
-  const bestHinge = Math.max(userHinge, autoHinge);
+  const bestDeadlift = Math.max(userDeadlift, autoDeadlift);
   const bestPress = Math.max(userPress, autoPress);
   const bestPull = Math.max(userPull, autoPull);
 
@@ -551,21 +551,21 @@ function calcPowerData() {
   const absoluteStrengthPoints =
     Math.floor(bestBench * 1.7) +
     Math.floor(bestSquat * 1.9) +
-    Math.floor(bestHinge * 1.9) +
+    Math.floor(bestDeadlift * 1.9) +
     Math.floor(bestPress * 1.5) +
     Math.floor(bestPull * 1.4);
 
   const relativeStrengthRaw =
     (bw > 0 ? bestBench / bw : 0) * 210 +
     (bw > 0 ? bestSquat / bw : 0) * 250 +
-    (bw > 0 ? bestHinge / bw : 0) * 250 +
+    (bw > 0 ? bestDeadlift / bw : 0) * 250 +
     (bw > 0 ? bestPress / bw : 0) * 170 +
     (bw > 0 ? bestPull / bw : 0) * 160;
 
   const leanMassEfficiencyRaw =
     (lbm > 0 ? bestBench / lbm : 0) * 160 +
     (lbm > 0 ? bestSquat / lbm : 0) * 185 +
-    (lbm > 0 ? bestHinge / lbm : 0) * 185 +
+    (lbm > 0 ? bestDeadlift / lbm : 0) * 185 +
     (lbm > 0 ? bestPress / lbm : 0) * 130 +
     (lbm > 0 ? bestPull / lbm : 0) * 125;
 
@@ -593,7 +593,7 @@ function calcPowerData() {
     totalVolume,
     bestBench: Math.round(bestBench),
     bestSquat: Math.round(bestSquat),
-    bestHinge: Math.round(bestHinge),
+    bestDeadlift: Math.round(bestDeadlift),
     bestPress: Math.round(bestPress),
     bestPull: Math.round(bestPull),
     relativeStrength: Math.round(relativeStrengthRaw),
@@ -640,7 +640,7 @@ function renderPowerPanel() {
     <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px;font-size:.72rem;color:var(--muted)">
       <div>Bench<br><span style="color:var(--text);font-weight:600">${p.bestBench || "—"}</span></div>
       <div>Squat<br><span style="color:var(--text);font-weight:600">${p.bestSquat || "—"}</span></div>
-      <div>Hinge<br><span style="color:var(--text);font-weight:600">${p.bestHinge || "—"}</span></div>
+      <div>Deadlift<br><span style="color:var(--text);font-weight:600">${p.bestDeadlift || "—"}</span></div>
       <div>Press<br><span style="color:var(--text);font-weight:600">${p.bestPress || "—"}</span></div>
       <div>Pull<br><span style="color:var(--text);font-weight:600">${p.bestPull || "—"}</span></div>
     </div>
@@ -686,8 +686,8 @@ function renderMaxesPanel() {
           <input id="max-squat" class="mono" type="number" inputmode="numeric" value="${m.squat || ""}" placeholder="315" />
         </div>
         <div>
-          <label>Hinge</label>
-          <input id="max-hinge" class="mono" type="number" inputmode="numeric" value="${m.hinge || ""}" placeholder="405" />
+          <label>Deadlift</label>
+          <input id="max-deadlift" class="mono" type="number" inputmode="numeric" value="${m.deadlift || m.hinge || ""}" placeholder="405" />
         </div>
         <div>
           <label>Press</label>
@@ -704,7 +704,7 @@ function renderMaxesPanel() {
   document.getElementById("toggleMaxesBtn").onclick = toggleMaxesPanel;
 
   if (!maxesCollapsed) {
-    ["bench", "squat", "hinge", "press", "pull"].forEach(key => {
+    ["bench", "squat", "deadlift", "press", "pull"].forEach(key => {
       bindBlurSave(`max-${key}`, () => saveUserMax(key, document.getElementById(`max-${key}`).value.trim()));
     });
   }

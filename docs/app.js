@@ -424,6 +424,20 @@ function calcTotalVolume(workouts) {
   return total;
 }
 
+function calcWorkoutVolume(workout) {
+  let total = 0;
+  (workout?.exercises || []).forEach(ex => {
+    (ex.sets || []).forEach(set => {
+      const w = parseFloat(set.weight);
+      const r = parseFloat(set.reps);
+      if (!isNaN(w) && !isNaN(r) && w > 0 && r > 0) {
+        total += w * r;
+      }
+    });
+  });
+  return total;
+}
+
 function calcStreakDays(workouts) {
   const dates = [...new Set(workouts.map(w => w.date).filter(Boolean))].sort().reverse();
   if (!dates.length) return 0;
@@ -456,6 +470,101 @@ function bestLiftForNames(workouts, names) {
     });
   });
   return best;
+}
+
+function calcWeeklyConsistency(workouts, weeks = 4) {
+  if (!Array.isArray(workouts) || !workouts.length) return { average: 0, current: 0, buckets: [] };
+
+  const buckets = [];
+  const today = new Date(`${todayString()}T00:00:00`);
+
+  for (let i = 0; i < weeks; i++) {
+    const start = new Date(today);
+    start.setDate(today.getDate() - (i * 7) - 6);
+    const end = new Date(today);
+    end.setDate(today.getDate() - (i * 7));
+
+    const count = workouts.filter(workout => {
+      if (!workout.date) return false;
+      const dt = new Date(`${workout.date}T00:00:00`);
+      return dt >= start && dt <= end;
+    }).length;
+
+    buckets.unshift({
+      label: `${start.toISOString().split("T")[0].slice(5)}–${end.toISOString().split("T")[0].slice(5)}`,
+      count
+    });
+  }
+
+  const total = buckets.reduce((sum, bucket) => sum + bucket.count, 0);
+  return {
+    average: buckets.length ? total / buckets.length : 0,
+    current: buckets[buckets.length - 1]?.count || 0,
+    buckets
+  };
+}
+
+function getLiftFocus(bestLifts) {
+  const entries = Object.entries(bestLifts)
+    .filter(([, value]) => value > 0)
+    .sort((a, b) => a[1] - b[1]);
+
+  if (!entries.length) return null;
+  const [key, value] = entries[0];
+  return {
+    key,
+    label: key.charAt(0).toUpperCase() + key.slice(1),
+    value
+  };
+}
+
+function buildPowerRecommendations(context) {
+  const items = [];
+
+  if (!context.sessionCount) {
+    return [
+      "Log your first full workout to unlock score deltas, trends, and lift-focused recommendations.",
+      "Add manual maxes if you want the rank to reflect current strength before enough sessions are logged.",
+      "Fill in body metrics to enable relative-strength and lean-efficiency scoring."
+    ];
+  }
+
+  if (!context.body.bodyWeight) {
+    items.push("Add bodyweight in Body Metrics so relative strength can influence the rank more accurately.");
+  }
+
+  if (!context.body.bodyFat) {
+    items.push("Add body fat % to turn on lean-mass efficiency and physique-adjusted scoring.");
+  }
+
+  if (context.currentWeekSessions < 3) {
+    items.push(`You have ${context.currentWeekSessions} session${context.currentWeekSessions === 1 ? "" : "s"} in the current 7-day window; getting to 3+ will raise consistency and momentum.`);
+  }
+
+  if (context.liftFocus) {
+    items.push(`${context.liftFocus.label} is your lowest powered lift group right now, so that is the fastest place to push for rank gains.`);
+  }
+
+  if (context.scoreDelta <= 0 && context.sessionCount > 1) {
+    items.push("Your score is flat versus the prior logged workout; a PR, stronger consistency, or updated body metrics would move it again.");
+  }
+
+  return items.slice(0, 3);
+}
+
+function calcPowerHistory(workouts) {
+  return workouts
+    .slice()
+    .reverse()
+    .map((workout, idx, ordered) => {
+      const subset = ordered.slice(0, idx + 1);
+      return {
+        name: workout.name,
+        date: workout.date || "—",
+        score: calcPowerData(subset, { includeHistory: false }).score,
+        volume: calcWorkoutVolume(workout)
+      };
+    });
 }
 
 function getRankInfo(score) {
@@ -516,8 +625,8 @@ function calcBodyData() {
   };
 }
 
-function calcPowerData() {
-  const workouts = state.workouts || [];
+function calcPowerData(workoutsInput = state.workouts || [], options = {}) {
+  const workouts = Array.isArray(workoutsInput) ? workoutsInput : [];
   const sessionCount = workouts.length;
   const totalVolume = calcTotalVolume(workouts);
   const streak = calcStreakDays(workouts);
@@ -540,9 +649,18 @@ function calcPowerData() {
   const bestPress = Math.max(userPress, autoPress);
   const bestPull = Math.max(userPull, autoPull);
 
+  const bestLifts = {
+    bench: Math.round(bestBench),
+    squat: Math.round(bestSquat),
+    deadlift: Math.round(bestDeadlift),
+    press: Math.round(bestPress),
+    pull: Math.round(bestPull)
+  };
+
   const body = calcBodyData();
   const bw = body.bodyWeight || 0;
   const lbm = body.leanMass || 0;
+  const weeklyConsistency = calcWeeklyConsistency(workouts);
 
   const sessionPoints = Math.min(sessionCount * 120, 2400);
   const volumePoints = Math.min(Math.floor(totalVolume / 100), 3000);
@@ -584,6 +702,48 @@ function calcPowerData() {
     leanAdjusted;
 
   const rank = getRankInfo(score);
+  const breakdown = [
+    { key: "strength", label: "Strength", value: absoluteStrengthPoints },
+    { key: "relative", label: "Relative", value: physiqueAdjustedRelative },
+    { key: "lean", label: "Lean", value: leanAdjusted },
+    { key: "volume", label: "Volume", value: volumePoints },
+    { key: "sessions", label: "Sessions", value: sessionPoints },
+    { key: "streak", label: "Streak", value: streakPoints }
+  ];
+
+  if (options.includeHistory === false) {
+    return {
+      score,
+      rank,
+      streak,
+      sessionCount,
+      totalVolume,
+      bestBench: bestLifts.bench,
+      bestSquat: bestLifts.squat,
+      bestDeadlift: bestLifts.deadlift,
+      bestPress: bestLifts.press,
+      bestPull: bestLifts.pull,
+      relativeStrength: Math.round(relativeStrengthRaw),
+      leanEfficiency: Math.round(leanMassEfficiencyRaw),
+      body,
+      bestLifts,
+      breakdown,
+      weeklyConsistency
+    };
+  }
+
+  const history = calcPowerHistory(workouts);
+  const previousScore = history.length > 1 ? history[history.length - 2].score : 0;
+  const scoreDelta = score - previousScore;
+  const recentHistory = history.slice(-6);
+  const liftFocus = getLiftFocus(bestLifts);
+  const recommendations = buildPowerRecommendations({
+    body,
+    currentWeekSessions: weeklyConsistency.current,
+    liftFocus,
+    scoreDelta,
+    sessionCount
+  });
 
   return {
     score,
@@ -591,14 +751,23 @@ function calcPowerData() {
     streak,
     sessionCount,
     totalVolume,
-    bestBench: Math.round(bestBench),
-    bestSquat: Math.round(bestSquat),
-    bestDeadlift: Math.round(bestDeadlift),
-    bestPress: Math.round(bestPress),
-    bestPull: Math.round(bestPull),
+    bestBench: bestLifts.bench,
+    bestSquat: bestLifts.squat,
+    bestDeadlift: bestLifts.deadlift,
+    bestPress: bestLifts.press,
+    bestPull: bestLifts.pull,
     relativeStrength: Math.round(relativeStrengthRaw),
     leanEfficiency: Math.round(leanMassEfficiencyRaw),
-    body
+    body,
+    bestLifts,
+    breakdown,
+    weeklyConsistency,
+    previousScore,
+    scoreDelta,
+    history: recentHistory,
+    lastWorkoutScore: recentHistory.length ? recentHistory[recentHistory.length - 1].score : 0,
+    liftFocus,
+    recommendations
   };
 }
 
@@ -609,45 +778,111 @@ function calcPowerData() {
 function renderPowerPanel() {
   const panel = document.getElementById("powerPanel");
   const p = calcPowerData();
+  const sparkBars = p.history.length
+    ? p.history.map(point => {
+        const maxScore = Math.max(...p.history.map(item => item.score), 1);
+        const height = Math.max(18, Math.round((point.score / maxScore) * 72));
+        return `
+          <div class="power-spark-item">
+            <div class="power-spark-bar" style="height:${height}px"></div>
+            <span>${point.date.slice(5)}</span>
+          </div>
+        `;
+      }).join("")
+    : '<div class="power-empty">Save a workout to unlock score trend tracking.</div>';
+
+  const breakdownCards = p.breakdown
+    .map(item => `
+      <div class="power-breakdown-card">
+        <span>${item.label}</span>
+        <strong>${item.value.toLocaleString()}</strong>
+      </div>
+    `)
+    .join("");
+
+  const liftCards = Object.entries(p.bestLifts)
+    .map(([key, value]) => `
+      <div class="power-lift-card">
+        <span>${key.charAt(0).toUpperCase() + key.slice(1)}</span>
+        <strong>${value || "—"}</strong>
+      </div>
+    `)
+    .join("");
+
+  const recommendationList = p.recommendations
+    .map(item => `<li>${item}</li>`)
+    .join("");
+
+  const deltaClass = p.scoreDelta > 0 ? "positive" : p.scoreDelta < 0 ? "negative" : "neutral";
+  const deltaPrefix = p.scoreDelta > 0 ? "+" : "";
 
   panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
-      <div>
-        <div style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Power Rank</div>
-        <div style="font-family:'Rajdhani',sans-serif;font-size:2rem;font-weight:700;color:var(--gold);line-height:1">${p.rank.current.rank}</div>
-        <div style="font-size:.85rem;color:var(--muted);margin-top:2px">
-          Power Index: <span style="color:var(--text);font-weight:600">${p.score.toLocaleString()}</span>
+    <div class="power-shell">
+      <section class="power-card power-card-hero">
+        <div class="power-headline">
+          <div>
+            <div class="power-kicker">Power Rank</div>
+            <div class="power-rank-row">
+              <div class="power-rank">${p.rank.current.rank}</div>
+              <div>
+                <div class="power-index">Power Index ${p.score.toLocaleString()}</div>
+                <div class="power-delta ${deltaClass}">${p.sessionCount > 1 ? `${deltaPrefix}${p.scoreDelta.toLocaleString()} vs previous log` : "Save another workout to track score changes"}</div>
+              </div>
+            </div>
+          </div>
+          <div class="power-stat-chip-wrap">
+            <div class="power-stat-chip"><span>Sessions</span><strong>${p.sessionCount}</strong></div>
+            <div class="power-stat-chip"><span>Streak</span><strong>${p.streak}</strong></div>
+            <div class="power-stat-chip"><span>7d Sessions</span><strong>${p.weeklyConsistency.current}</strong></div>
+            <div class="power-stat-chip"><span>LBM</span><strong>${p.body.leanMass ? Math.round(p.body.leanMass) : "—"}</strong></div>
+          </div>
         </div>
-      </div>
 
-      <div style="flex:1;min-width:220px">
-        <div style="display:flex;justify-content:space-between;gap:8px;font-size:.78rem;color:var(--muted);margin-bottom:6px">
-          <span>${p.rank.current.rank} Rank</span>
-          <span>${p.rank.next ? `${p.rank.remaining.toLocaleString()} to ${p.rank.next.rank}` : "Max Rank"}</span>
+        <div>
+          <div class="power-progress-row">
+            <span>${p.rank.current.rank} Rank</span>
+            <span>${p.rank.next ? `${p.rank.remaining.toLocaleString()} to ${p.rank.next.rank}` : "Max Rank"}</span>
+          </div>
+          <div class="power-progress-track">
+            <div class="power-progress-fill" style="width:${p.rank.progress}%"></div>
+          </div>
         </div>
-        <div style="height:10px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden">
-          <div style="height:100%;width:${p.rank.progress}%;background:linear-gradient(90deg,var(--gold),var(--accent))"></div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px;font-size:.76rem;color:var(--muted)">
-          <div>Sessions<br><span style="color:var(--text);font-weight:600">${p.sessionCount}</span></div>
-          <div>Streak<br><span style="color:var(--text);font-weight:600">${p.streak}</span></div>
-          <div>Volume<br><span style="color:var(--text);font-weight:600">${p.totalVolume.toLocaleString()}</span></div>
-          <div>LBM<br><span style="color:var(--text);font-weight:600">${p.body.leanMass ? Math.round(p.body.leanMass) : "—"}</span></div>
-        </div>
-      </div>
-    </div>
+      </section>
 
-    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px;font-size:.72rem;color:var(--muted)">
-      <div>Bench<br><span style="color:var(--text);font-weight:600">${p.bestBench || "—"}</span></div>
-      <div>Squat<br><span style="color:var(--text);font-weight:600">${p.bestSquat || "—"}</span></div>
-      <div>Deadlift<br><span style="color:var(--text);font-weight:600">${p.bestDeadlift || "—"}</span></div>
-      <div>Press<br><span style="color:var(--text);font-weight:600">${p.bestPress || "—"}</span></div>
-      <div>Pull<br><span style="color:var(--text);font-weight:600">${p.bestPull || "—"}</span></div>
-    </div>
+      <section class="power-card">
+        <div class="power-section-title">Score Breakdown</div>
+        <div class="power-breakdown-grid">${breakdownCards}</div>
+      </section>
 
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;font-size:.72rem;color:var(--muted)">
-      <div>Relative Strength<br><span style="color:var(--text);font-weight:600">${p.relativeStrength || "—"}</span></div>
-      <div>Lean Efficiency<br><span style="color:var(--text);font-weight:600">${p.leanEfficiency || "—"}</span></div>
+      <section class="power-card">
+        <div class="power-section-title">Lift Focus</div>
+        <div class="power-focus-grid">
+          <div>
+            <div class="power-focus-label">Best Lift Snapshot</div>
+            <div class="power-lift-grid">${liftCards}</div>
+          </div>
+          <div class="power-focus-box">
+            <div class="power-focus-label">Fastest Next Gain</div>
+            <strong>${p.liftFocus ? `${p.liftFocus.label} group` : "No lift data yet"}</strong>
+            <span>${p.liftFocus ? `${p.liftFocus.value} est. best` : "Log sets or add maxes to find your current focus lift."}</span>
+          </div>
+          <div class="power-focus-box">
+            <div class="power-focus-label">Efficiency</div>
+            <strong>${p.relativeStrength || "—"}</strong>
+            <span>Relative Strength · Lean Efficiency ${p.leanEfficiency || "—"}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="power-card">
+        <div class="power-section-title">Score Trend</div>
+        <div class="power-sparkline">${sparkBars}</div>
+      </section>
+
+      <section class="power-card power-card-wide">
+        <div class="power-section-title">Coach Notes</div>
+        <ul class="power-recommendations">${recommendationList}</ul>
+      </section>
     </div>
   `;
 }
@@ -983,23 +1218,74 @@ function findLastPerformance(exerciseName) {
     for (const ex of (workout.exercises || [])) {
       if (!namesMatch(ex.name, exerciseName)) continue;
       if (!Array.isArray(ex.sets) || !ex.sets.length) continue;
-      const valid = ex.sets.find(s => s.weight && s.reps);
-      if (valid) return valid;
+      const validSets = ex.sets.filter(set => set.weight && set.reps);
+      if (!validSets.length) continue;
+
+      const weight = parseFloat(validSets[0].weight);
+      const reps = validSets.map(set => parseFloat(set.reps)).filter(Number.isFinite);
+      const avgReps = reps.length ? reps.reduce((sum, rep) => sum + rep, 0) / reps.length : 0;
+
+      return {
+        weight: validSets[0].weight,
+        reps: validSets[0].reps,
+        avgReps,
+        setCount: validSets.length,
+        sets: validSets,
+        numericWeight: Number.isFinite(weight) ? weight : 0
+      };
     }
   }
   return null;
 }
 
-function suggestWeight(exerciseName, last, startWeight = "") {
-  if (!last) return String(startWeight || "");
-  const weight = parseFloat(last.weight);
-  const reps = parseFloat(last.reps);
-  if (isNaN(weight) || isNaN(reps)) return String(startWeight || "");
+function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetReps = 8) {
+  if (!lastPerformance) {
+    return {
+      value: String(startWeight || ""),
+      reason: startWeight ? "Using your preset until you log this movement." : "Log this movement once to unlock a recommendation."
+    };
+  }
 
+  const weight = parseFloat(lastPerformance.weight);
+  if (!Number.isFinite(weight)) {
+    return {
+      value: String(startWeight || ""),
+      reason: "Invalid prior weight; falling back to your preset."
+    };
+  }
+
+  const reps = (lastPerformance.sets || [])
+    .map(set => parseFloat(set.reps))
+    .filter(Number.isFinite);
   const jump = EXERCISE_RULES[exerciseName] ?? 5;
-  if (jump === 0) return String(weight);
-  if (reps >= 8) return String(weight + jump);
-  return String(weight);
+  const allHitTarget = reps.length && reps.every(rep => rep >= targetReps);
+  const averageReps = reps.length ? reps.reduce((sum, rep) => sum + rep, 0) / reps.length : 0;
+
+  if (jump === 0) {
+    return {
+      value: String(weight),
+      reason: allHitTarget ? "Bodyweight movement held steady after hitting the target." : "Bodyweight movement stays steady until reps improve."
+    };
+  }
+
+  if (allHitTarget) {
+    return {
+      value: String(weight + jump),
+      reason: `All logged sets hit ${targetReps}+ reps last time, so the load moves up by ${jump}.`
+    };
+  }
+
+  if (averageReps > 0 && averageReps <= Math.max(1, targetReps - 2)) {
+    return {
+      value: String(weight),
+      reason: `Average reps were ${averageReps.toFixed(1)}, so keep the load steady and own the rep target first.`
+    };
+  }
+
+  return {
+    value: String(weight),
+    reason: `You were close to the ${targetReps}-rep target; repeat the load and try to clean up the remaining reps.`
+  };
 }
 
 // ==============================
@@ -1171,7 +1457,7 @@ function renderWorkout(draft = null) {
     const draftEx = draftExercises[exIndex] || null;
     const options = getDayOptions(selectedDay, ex.name);
     const last = findLastPerformance(ex.name);
-    const suggested = suggestWeight(ex.name, last, ex.startWeight || "");
+    const suggested = suggestWeight(ex.name, last, ex.startWeight || "", ex.reps || 8);
 
     const card = document.createElement("div");
     card.className = "exercise-card";
@@ -1181,7 +1467,7 @@ function renderWorkout(draft = null) {
     head.innerHTML = `
       <div>
         <h3>${ex.name}</h3>
-        <div class="exercise-meta">${last ? `Last: ${last.weight} x ${last.reps}` : "No previous log"}</div>
+        <div class="exercise-meta">${last ? `Last: ${last.weight} x ${last.reps} · avg ${last.avgReps.toFixed(1)} over ${last.setCount} set${last.setCount === 1 ? "" : "s"}` : "No previous log"}</div>
       </div>
       <div>${ex.collapsed ? "►" : "▼"}</div>
     `;
@@ -1220,7 +1506,7 @@ presetRow.innerHTML = `
     <input class="preset-weight" value="${ex.startWeight || ""}" placeholder="135">
   </div>
   <button class="ghost" type="button">Use Preset</button>
-  <div class="exercise-suggest">Suggested: ${suggested || "—"}</div>
+  <div class="exercise-suggest">Suggested: ${suggested.value || "—"}<br><small>${suggested.reason}</small></div>
 `;
 
 const demoRow = document.createElement("div");
@@ -1236,7 +1522,7 @@ body.appendChild(editGrid);
 body.appendChild(presetRow);
 body.appendChild(demoRow);
 
-    rebuildSetRows(body, ex.sets, suggested, draftEx?.entries || []);
+    rebuildSetRows(body, ex.sets, suggested.value, draftEx?.entries || []);
 
     const selectInput = editGrid.querySelector(".edit-select");
     const setsInput = editGrid.querySelector(".edit-sets");
@@ -1270,6 +1556,7 @@ const demoBtn = demoRow.querySelector("button");
     repsInput.oninput = () => {
       exercises[exIndex].reps = Math.max(1, parseInt(repsInput.value || "1", 10));
       persistCurrentLayout();
+      renderWorkout();
       persistDraftForDay();
     };
 
@@ -1279,8 +1566,8 @@ const demoBtn = demoRow.querySelector("button");
 
     presetInput.oninput = () => {
       exercises[exIndex].startWeight = presetInput.value.trim();
-      const liveSuggested = suggestWeight(ex.name, findLastPerformance(ex.name), exercises[exIndex].startWeight || "");
-      suggestText.textContent = `Suggested: ${liveSuggested || "—"}`;
+      const liveSuggested = suggestWeight(ex.name, findLastPerformance(ex.name), exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8);
+      suggestText.innerHTML = `Suggested: ${liveSuggested.value || "—"}<br><small>${liveSuggested.reason}</small>`;
       persistCurrentLayout();
       persistDraftForDay();
     };

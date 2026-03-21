@@ -304,6 +304,198 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
   padding:12px;
 }
 
+
+.power-shell{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+
+.power-card{
+  background:rgba(9,13,19,.45);
+  border:1px solid rgba(200,169,107,.16);
+  border-radius:14px;
+  padding:12px;
+}
+
+.power-card-hero,
+.power-card-wide{
+  grid-column:1 / -1;
+}
+
+.power-kicker,
+.power-section-title,
+.power-focus-label{
+  font-size:.72rem;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+
+.power-headline{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+  margin-bottom:12px;
+}
+
+.power-rank-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-top:6px;
+  flex-wrap:wrap;
+}
+
+.power-rank{
+  font-family:'Rajdhani',sans-serif;
+  font-size:2.6rem;
+  font-weight:700;
+  color:var(--gold);
+  line-height:1;
+}
+
+.power-index{
+  font-size:1rem;
+  font-weight:600;
+}
+
+.power-delta{
+  font-size:.8rem;
+  margin-top:4px;
+}
+
+.power-delta.positive{color:#7fda9d}
+.power-delta.negative{color:#ff8a8a}
+.power-delta.neutral{color:var(--muted)}
+
+.power-stat-chip-wrap{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(110px,1fr));
+  gap:8px;
+  min-width:min(100%,260px);
+}
+
+.power-stat-chip,
+.power-breakdown-card,
+.power-lift-card,
+.power-focus-box{
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:10px;
+}
+
+.power-stat-chip span,
+.power-breakdown-card span,
+.power-lift-card span,
+.power-focus-box span{
+  display:block;
+  color:var(--muted);
+  font-size:.76rem;
+}
+
+.power-stat-chip strong,
+.power-breakdown-card strong,
+.power-lift-card strong,
+.power-focus-box strong{
+  display:block;
+  margin-top:4px;
+  color:var(--text);
+  font-size:1rem;
+}
+
+.power-progress-row{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  font-size:.78rem;
+  color:var(--muted);
+  margin-bottom:6px;
+}
+
+.power-progress-track{
+  height:10px;
+  background:rgba(255,255,255,.08);
+  border-radius:999px;
+  overflow:hidden;
+}
+
+.power-progress-fill{
+  height:100%;
+  background:linear-gradient(90deg,var(--gold),var(--accent));
+}
+
+.power-breakdown-grid,
+.power-lift-grid,
+.power-focus-grid{
+  display:grid;
+  gap:8px;
+}
+
+.power-breakdown-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+
+.power-lift-grid{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  margin-top:8px;
+}
+
+.power-focus-grid{
+  grid-template-columns:1.2fr .9fr .9fr;
+}
+
+.power-sparkline{
+  min-height:110px;
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+}
+
+.power-spark-item{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+}
+
+.power-spark-item span{
+  color:var(--muted);
+  font-size:.72rem;
+}
+
+.power-spark-bar{
+  width:100%;
+  max-width:42px;
+  border-radius:10px 10px 4px 4px;
+  background:linear-gradient(180deg, rgba(200,169,107,.95), rgba(109,164,255,.65));
+  box-shadow:0 6px 16px rgba(0,0,0,.18);
+}
+
+.power-recommendations{
+  margin:0;
+  padding-left:18px;
+  display:grid;
+  gap:8px;
+  color:var(--text);
+}
+
+.power-empty{
+  color:var(--muted);
+  font-size:.84rem;
+}
+
+.exercise-suggest small{
+  display:block;
+  margin-top:3px;
+  color:var(--dim);
+  line-height:1.35;
+}
+
 .exercise-toolbar{
   display:flex;
   gap:8px;
@@ -528,7 +720,13 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
   .preset-row{grid-template-columns:1fr}
   .setRow{grid-template-columns:50px 1fr 1fr}
   .setRow .rest-btn{grid-column:1 / -1}
-  #powerPanel > div:last-child,
+  .power-shell,
+  .power-focus-grid{
+    grid-template-columns:1fr;
+  }
+
+  .power-breakdown-grid,
+  .power-lift-grid,
   #maxesBody > div{
     grid-template-columns:1fr 1fr !important;
   }
@@ -538,7 +736,9 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
   .wrap{padding:10px}
   .hero,.card{padding:12px}
   h1{font-size:1.7rem}
-  #powerPanel > div:last-child,
+  .power-breakdown-grid,
+  .power-lift-grid,
+  .power-stat-chip-wrap,
   #maxesBody > div{
     grid-template-columns:1fr !important;
   }

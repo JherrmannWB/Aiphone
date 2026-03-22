@@ -743,3 +743,254 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
     grid-template-columns:1fr !important;
   }
 }
+body[data-page="power"] .wrap,
+body[data-page="workout"] .wrap{
+  padding-top:20px;
+  padding-bottom:28px;
+}
+
+.shell-card{
+  margin-bottom:14px;
+}
+
+.page-nav{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:18px;
+  flex-wrap:wrap;
+}
+
+.page-title{
+  font-size:2rem;
+  line-height:1;
+}
+
+.page-copy{
+  margin-top:8px;
+  color:var(--muted);
+  max-width:720px;
+  line-height:1.5;
+  font-size:.94rem;
+}
+
+.page-links{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.page-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:42px;
+  padding:0 14px;
+  border-radius:12px;
+  text-decoration:none;
+  color:var(--muted);
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.02);
+  transition:.15s ease;
+}
+
+.page-link:hover{
+  color:var(--text);
+  border-color:var(--border2);
+  transform:translateY(-1px);
+}
+
+.page-link.active{
+  color:#efe6d2;
+  border-color:#876f46;
+  background:linear-gradient(180deg, rgba(200,169,107,.16), rgba(200,169,107,.06));
+}
+
+.page-hero{
+  margin-bottom:14px;
+}
+
+.eyebrow{
+  color:var(--gold);
+  font-size:.72rem;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  margin-bottom:8px;
+}
+
+.metrics-panel-shell{
+  margin-top:12px;
+}
+
+.exercise-toolbar{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  margin:12px 0;
+}
+
+.exercise-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+button.danger{
+  background:linear-gradient(180deg,#7a4343,#623535);
+  border-color:#8c5555;
+  color:#fff1f1;
+}
+
+.exercise-suggest strong{
+  color:#efe6d2;
+}
+
+.setRow{
+  grid-template-columns:60px minmax(0,1fr) minmax(0,1fr) minmax(150px,1fr) 86px;
+}
+
+.set-label{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+
+.set-label small{
+  color:var(--dim);
+  font-size:.68rem;
+}
+
+.set-suggestion{
+  min-height:42px;
+  padding:9px 10px;
+  border:1px dashed var(--border2);
+  border-radius:11px;
+  background:rgba(127,149,173,.05);
+  color:var(--muted);
+  font-size:.78rem;
+  line-height:1.35;
+}
+
+.set-suggestion strong{
+  display:block;
+  color:var(--text);
+  font-size:.86rem;
+}
+
+.set-suggestion.ready{
+  border-style:solid;
+  border-color:rgba(127,149,173,.35);
+  color:#c9d5e2;
+}
+
+.progress-card{
+  margin-top:14px;
+  padding:14px;
+  border:1px solid rgba(127,149,173,.2);
+  border-radius:16px;
+  background:linear-gradient(180deg, rgba(127,149,173,.08), rgba(127,149,173,.03));
+}
+
+.progress-head{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+}
+
+.progress-kicker{
+  color:var(--muted);
+  font-size:.72rem;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-bottom:4px;
+}
+
+.progress-title{
+  font-family:'Rajdhani',sans-serif;
+  font-size:1.4rem;
+}
+
+.progress-copy{
+  color:var(--muted);
+  font-size:.84rem;
+  line-height:1.45;
+  margin-top:4px;
+}
+
+.progress-pill-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.progress-pill{
+  min-width:110px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:rgba(5,7,10,.25);
+}
+
+.progress-pill span{
+  display:block;
+  color:var(--muted);
+  font-size:.68rem;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+
+.progress-pill strong{
+  display:block;
+  margin-top:4px;
+  font-family:'Rajdhani',sans-serif;
+  font-size:1.15rem;
+}
+
+.progress-track-wrap{
+  margin-top:12px;
+}
+
+.progress-track{
+  width:100%;
+  height:10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.06);
+  overflow:hidden;
+}
+
+.progress-fill{
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg, #7f95ad, #c8a96b);
+}
+
+.progress-foot{
+  margin-top:10px;
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+  color:var(--muted);
+  font-size:.8rem;
+}
+
+@media (max-width: 720px){
+  .page-nav,
+  .progress-head{
+    align-items:stretch;
+  }
+
+  .exercise-toolbar{
+    grid-template-columns:1fr;
+  }
+
+  .setRow{
+    grid-template-columns:1fr;
+  }
+
+  .setRow .rest-btn{
+    grid-column:auto;
+  }
+}

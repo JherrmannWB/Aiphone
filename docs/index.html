@@ -9,49 +9,30 @@
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Outfit:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body data-page="power">
   <div class="toast-wrap" id="toastWrap"></div>
 
-  <button class="rest-fab hidden" id="restFab" type="button">Show Rest</button>
-
-  <div class="rest-widget hidden" id="restWidget">
-    <div class="rest-head">
-      <span>Rest Timer</span>
-      <button class="ghost mini" id="restHideBtn" type="button">Hide</button>
-    </div>
-    <div class="rest-time mono" id="restDisplay">1:30</div>
-    <div class="rest-actions">
-      <button class="primary" id="restToggleBtn" type="button">Start</button>
-      <button class="ghost" id="restResetBtn" type="button">Reset</button>
-    </div>
-    <div class="rest-presets">
-      <button class="ghost mini" data-rest="60" type="button">1m</button>
-      <button class="ghost mini" data-rest="90" type="button">90s</button>
-      <button class="ghost mini" data-rest="120" type="button">2m</button>
-      <button class="ghost mini" data-rest="180" type="button">3m</button>
-    </div>
-  </div>
-
   <div class="wrap">
-    <section class="hero">
+    <header class="page-nav card shell-card">
+      <div>
+        <div class="eyebrow">Aiphone Training Suite</div>
+        <h1 class="page-title">Power Calculator</h1>
+        <p class="page-copy">Review your power index, monitor score trends, and update the strength inputs that drive your progression model.</p>
+      </div>
+      <nav class="page-links" aria-label="Primary">
+        <a class="page-link active" href="index.html" aria-current="page">Power Calculator</a>
+        <a class="page-link" href="workout.html">Workout Tracker</a>
+      </nav>
+    </header>
+
+    <section class="hero page-hero">
       <div class="hero-top">
         <div>
-          <h1>Power Calculator</h1>
+          <div class="eyebrow">Performance Overview</div>
+          <h2>Strength analytics that stay synced with your workout log.</h2>
           <p class="hero-copy">
-            Tactical training log for your Push / Pull / Legs rotation. Track strength, progression, session flow, and rank growth.
+            Your saved sessions automatically feed the rank model below so you can spot trends, adjust maxes, and keep your next focus lift clear.
           </p>
-        </div>
-
-        <div class="session-timer-wrap" id="sessionTimerWrap">
-          <div class="session-pill" id="sessionPill">
-            <div>
-              <div class="pill-label">Session Time</div>
-              <div class="mono pill-time" id="sessionDisplay">0:00</div>
-            </div>
-          </div>
-          <button class="ghost mini" id="sessionPauseBtn" type="button">Pause</button>
-          <button class="ghost mini" id="sessionResetBtn" type="button">Reset</button>
-          <button class="ghost mini" id="sessionHideBtn" type="button">Hide</button>
         </div>
       </div>
 
@@ -76,79 +57,8 @@
 
       <div id="powerPanel"></div>
       <div id="maxesPanel"></div>
+      <div id="bodyMetricsPanel" class="metrics-panel-shell"></div>
     </section>
-
-    <div class="tabbar" id="tabbar"></div>
-
-    <div class="grid">
-      <section class="card">
-        <div class="section-head">
-          <div>
-            <h2>Active Session</h2>
-            <div class="section-sub">Load the day, log each set, and keep the session moving.</div>
-          </div>
-          <div class="toolbar">
-            <button class="ghost" id="loadTplBtn" type="button">Load Selected</button>
-            <button class="primary" id="loadNextBtn" type="button">Load Next</button>
-          </div>
-        </div>
-
-        <div class="form-row cols-2">
-          <div>
-            <label for="wkName">Workout Day</label>
-            <input id="wkName" placeholder="Push A" />
-          </div>
-          <div>
-            <label for="wkDate">Date</label>
-            <input id="wkDate" type="date" />
-          </div>
-        </div>
-
-        <div class="form-row cols-2">
-          <div>
-            <label for="bodyWt">Bodyweight</label>
-            <input id="bodyWt" class="mono" placeholder="205" />
-          </div>
-          <div>
-            <label for="focusNotes">Focus</label>
-            <input id="focusNotes" placeholder="Shoulders, chest drive, posture..." />
-          </div>
-        </div>
-
-        <div class="toolbar" id="exerciseToolbarWrap">
-          <button class="ghost" id="expandAllBtn" type="button">Expand All</button>
-          <button class="ghost" id="collapseAllBtn" type="button">Collapse All</button>
-          <button class="ghost" id="openRestBtn" type="button">Rest Timer</button>
-          <button class="ghost" id="clearBtn" type="button">Clear Session</button>
-        </div>
-
-        <div id="exerciseToolbar"></div>
-        <div class="exercise-list" id="exList"></div>
-
-        <div class="sticky-actions">
-          <button class="success" id="saveBtn" type="button">Save Workout</button>
-        </div>
-
-        <div class="notes-wrap">
-          <label for="wkNotes">Session Notes</label>
-          <textarea id="wkNotes" placeholder="Pump, pain, PRs, cardio, supplements, observations..."></textarea>
-        </div>
-      </section>
-
-      <aside class="card">
-        <div class="section-head">
-          <div>
-            <h2>Session History</h2>
-            <div class="section-sub">Latest saved sessions</div>
-          </div>
-          <div class="toolbar">
-            <button class="ghost" id="exportBtn" type="button">Export Log</button>
-          </div>
-        </div>
-
-        <div class="history-list" id="histList"></div>
-      </aside>
-    </div>
   </div>
 
   <script src="app.js"></script>

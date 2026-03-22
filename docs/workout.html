@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workout Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Outfit:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="workout">
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <button class="rest-fab hidden" id="restFab" type="button">Show Rest</button>
+
+  <div class="rest-widget hidden" id="restWidget">
+    <div class="rest-head">
+      <span>Rest Timer</span>
+      <button class="ghost mini" id="restHideBtn" type="button">Hide</button>
+    </div>
+    <div class="rest-time mono" id="restDisplay">1:30</div>
+    <div class="rest-actions">
+      <button class="primary" id="restToggleBtn" type="button">Start</button>
+      <button class="ghost" id="restResetBtn" type="button">Reset</button>
+    </div>
+    <div class="rest-presets">
+      <button class="ghost mini" data-rest="60" type="button">1m</button>
+      <button class="ghost mini" data-rest="90" type="button">90s</button>
+      <button class="ghost mini" data-rest="120" type="button">2m</button>
+      <button class="ghost mini" data-rest="180" type="button">3m</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <header class="page-nav card shell-card">
+      <div>
+        <div class="eyebrow">Aiphone Training Suite</div>
+        <h1 class="page-title">Workout Tracker</h1>
+        <p class="page-copy">Build your Push / Pull / Legs sessions, log every set, and carry your progress forward with smarter suggestions.</p>
+      </div>
+      <nav class="page-links" aria-label="Primary">
+        <a class="page-link" href="index.html">Power Calculator</a>
+        <a class="page-link active" href="workout.html" aria-current="page">Workout Tracker</a>
+      </nav>
+    </header>
+
+    <section class="hero page-hero">
+      <div class="hero-top">
+        <div>
+          <div class="eyebrow">Session Command</div>
+          <h2>Load the day, log the work, and keep the session moving.</h2>
+          <p class="hero-copy">
+            Suggested weights now anchor to your set 1 load, so the rest of the exercise stays practical and easy to adjust as you train.
+          </p>
+        </div>
+
+        <div class="session-timer-wrap" id="sessionTimerWrap">
+          <div class="session-pill" id="sessionPill">
+            <div>
+              <div class="pill-label">Session Time</div>
+              <div class="mono pill-time" id="sessionDisplay">0:00</div>
+            </div>
+          </div>
+          <button class="ghost mini" id="sessionPauseBtn" type="button">Pause</button>
+          <button class="ghost mini" id="sessionResetBtn" type="button">Reset</button>
+          <button class="ghost mini" id="sessionHideBtn" type="button">Hide</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">Next Workout</div>
+          <div class="stat-value accent" id="nextStat">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Sessions</div>
+          <div class="stat-value" id="sessionsStat">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Streak</div>
+          <div class="stat-value success" id="streakStat">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Last Session</div>
+          <div class="stat-value smallish" id="lastStat">—</div>
+        </div>
+      </div>
+
+      <div id="trackerProgress"></div>
+    </section>
+
+    <div class="tabbar" id="tabbar"></div>
+
+    <div class="grid">
+      <section class="card">
+        <div class="section-head">
+          <div>
+            <h2>Active Session</h2>
+            <div class="section-sub">Adjust the day, add or delete movements, and keep your set suggestions flowing from set 1.</div>
+          </div>
+          <div class="toolbar">
+            <button class="ghost" id="loadTplBtn" type="button">Load Selected</button>
+            <button class="primary" id="loadNextBtn" type="button">Load Next</button>
+          </div>
+        </div>
+
+        <div class="form-row cols-2">
+          <div>
+            <label for="wkName">Workout Day</label>
+            <input id="wkName" placeholder="Push A" />
+          </div>
+          <div>
+            <label for="wkDate">Date</label>
+            <input id="wkDate" type="date" />
+          </div>
+        </div>
+
+        <div class="form-row cols-2">
+          <div>
+            <label for="bodyWt">Bodyweight</label>
+            <input id="bodyWt" class="mono" placeholder="205" />
+          </div>
+          <div>
+            <label for="focusNotes">Focus</label>
+            <input id="focusNotes" placeholder="Shoulders, chest drive, posture..." />
+          </div>
+        </div>
+
+        <div class="toolbar" id="exerciseToolbarWrap">
+          <button class="ghost" id="expandAllBtn" type="button">Expand All</button>
+          <button class="ghost" id="collapseAllBtn" type="button">Collapse All</button>
+          <button class="ghost" id="openRestBtn" type="button">Rest Timer</button>
+          <button class="ghost" id="clearBtn" type="button">Clear Session</button>
+        </div>
+
+        <div id="exerciseToolbar"></div>
+        <div class="exercise-list" id="exList"></div>
+
+        <div class="sticky-actions">
+          <button class="success" id="saveBtn" type="button">Save Workout</button>
+        </div>
+
+        <div class="notes-wrap">
+          <label for="wkNotes">Session Notes</label>
+          <textarea id="wkNotes" placeholder="Pump, pain, PRs, cardio, supplements, observations..."></textarea>
+        </div>
+      </section>
+
+      <aside class="card">
+        <div class="section-head">
+          <div>
+            <h2>Session History</h2>
+            <div class="section-sub">Latest saved sessions</div>
+          </div>
+          <div class="toolbar">
+            <button class="ghost" id="exportBtn" type="button">Export Log</button>
+          </div>
+        </div>
+
+        <div class="history-list" id="histList"></div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

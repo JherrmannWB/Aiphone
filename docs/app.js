@@ -4,6 +4,8 @@
 
 const STORAGE_KEY = "power_calculator_v3";
 
+const currentPage = document.body?.dataset?.page || "workout";
+
 const ROUTINE = [
   "Push A",
   "Pull A",
@@ -40,8 +42,10 @@ const TEMPLATES = {
   "Push B": [
     { name: "Incline Barbell Press", sets: 4, reps: 8, startWeight: "95", collapsed: false },
     { name: "Arnold Press", sets: 4, reps: 10, startWeight: "25", collapsed: true },
+    { name: "Machine Shoulder Press", sets: 3, reps: 10, startWeight: "70", collapsed: true },
     { name: "Pec Deck", sets: 3, reps: 12, startWeight: "100", collapsed: true },
     { name: "Upright Row", sets: 3, reps: 10, startWeight: "45", collapsed: true },
+    { name: "Machine Press", sets: 3, reps: 10, startWeight: "90", collapsed: true },
     { name: "Dips", sets: 3, reps: 8, startWeight: "", collapsed: true },
     { name: "Overhead Tricep Extension", sets: 3, reps: 12, startWeight: "35", collapsed: true }
   ],
@@ -65,7 +69,7 @@ const TEMPLATES = {
 const DAY_EXERCISE_OPTIONS = {
   "Push A": [
     "Barbell Bench Press", "Standing Barbell Shoulder Press", "Cable Fly", "Cable Lateral Raise",
-    "Tricep Pushdown", "Overhead Tricep Extension", "Pec Deck", "Dips", "Incline Barbell Press", "Arnold Press"
+    "Tricep Pushdown", "Overhead Tricep Extension", "Pec Deck", "Machine Press", "Machine Shoulder Press", "Dips", "Incline Barbell Press", "Arnold Press"
   ],
   "Pull A": [
     "Barbell Row", "Pullups", "Seated Row", "Barbell Curl", "Hammer Curl", "Face Pull",
@@ -77,7 +81,7 @@ const DAY_EXERCISE_OPTIONS = {
   ],
   "Push B": [
     "Incline Barbell Press", "Arnold Press", "Pec Deck", "Upright Row", "Dips",
-    "Overhead Tricep Extension", "Barbell Bench Press", "Cable Fly", "Cable Lateral Raise", "Tricep Pushdown"
+    "Overhead Tricep Extension", "Machine Press", "Machine Shoulder Press", "Barbell Bench Press", "Cable Fly", "Cable Lateral Raise", "Tricep Pushdown"
   ],
   "Pull B": [
     "Deadlift", "Chest Supported Row", "Lat Pulldown", "Preacher Curl", "Cable Curl", "Rear Delt Fly",
@@ -109,7 +113,9 @@ const EXERCISE_DEFAULTS = {
   "Standing Calf Raise": { sets: 4, reps: 15, startWeight: "135" },
   "Incline Barbell Press": { sets: 4, reps: 8, startWeight: "95" },
   "Arnold Press": { sets: 4, reps: 10, startWeight: "25" },
+  "Machine Shoulder Press": { sets: 3, reps: 10, startWeight: "70" },
   "Pec Deck": { sets: 3, reps: 12, startWeight: "100" },
+  "Machine Press": { sets: 3, reps: 10, startWeight: "90" },
   "Upright Row": { sets: 3, reps: 10, startWeight: "45" },
   "Dips": { sets: 3, reps: 8, startWeight: "" },
   "Deadlift": { sets: 3, reps: 6, startWeight: "185" },
@@ -145,7 +151,9 @@ const EXERCISE_RULES = {
   "Standing Calf Raise": 10,
   "Incline Barbell Press": 5,
   "Arnold Press": 5,
+  "Machine Shoulder Press": 10,
   "Pec Deck": 10,
+  "Machine Press": 10,
   "Upright Row": 5,
   "Dips": 0,
   "Deadlift": 10,
@@ -180,7 +188,7 @@ const POWER_LIFT_GROUPS = {
   bench: ["Barbell Bench Press", "Incline Barbell Press", "Dips"],
   squat: ["Back Squat", "Front Squat", "Bulgarian Split Squat"],
   deadlift: ["Deadlift", "Romanian Deadlift", "Hip Thrust"],
-  press: ["Standing Barbell Shoulder Press", "Arnold Press"],
+  press: ["Standing Barbell Shoulder Press", "Arnold Press", "Machine Shoulder Press", "Machine Press"],
   pull: ["Barbell Row", "Chest Supported Row", "Lat Pulldown", "Seated Row", "Pullups"]
 };
 
@@ -214,7 +222,9 @@ const EXERCISE_VIDEO_SEARCH = {
   "Standing Calf Raise": "https://www.youtube.com/results?search_query=standing+calf+raise+tutorial",
   "Incline Barbell Press": "https://www.youtube.com/results?search_query=Jeff+Nippard+incline+barbell+press+tutorial",
   "Arnold Press": "https://www.youtube.com/results?search_query=Arnold+press+tutorial",
+  "Machine Shoulder Press": "https://www.youtube.com/results?search_query=machine+shoulder+press+tutorial",
   "Pec Deck": "https://www.youtube.com/results?search_query=pec+deck+tutorial",
+  "Machine Press": "https://www.youtube.com/results?search_query=machine+chest+press+tutorial",
   "Upright Row": "https://www.youtube.com/results?search_query=upright+row+tutorial",
   "Dips": "https://www.youtube.com/results?search_query=Jeff+Nippard+dips+tutorial",
   "Deadlift": "https://www.youtube.com/results?search_query=Jeff+Nippard+deadlift+tutorial",
@@ -299,6 +309,7 @@ function saveState() {
   renderPowerPanel();
   renderMaxesPanel();
   renderBodyMetricsPanel();
+  renderTrackerProgress();
 }
 
 function persistCurrentLayout() {
@@ -384,6 +395,51 @@ function showToast(message, type = "") {
 function parseNum(v) {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function roundToIncrement(value, increment) {
+  if (!Number.isFinite(value)) return NaN;
+  if (!increment || increment <= 0) return Math.max(0, Math.round(value));
+  return Math.max(0, Math.round(value / increment) * increment);
+}
+
+function formatSuggestedWeight(value) {
+  if (!Number.isFinite(value)) return "";
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function getSetSuggestionRatios(setCount) {
+  const preset = {
+    1: [1],
+    2: [1, 0.975],
+    3: [1, 0.975, 0.95],
+    4: [1, 1, 0.975, 0.95],
+    5: [1, 1, 0.975, 0.95, 0.925],
+    6: [1, 1, 0.98, 0.96, 0.94, 0.92]
+  };
+
+  if (preset[setCount]) return preset[setCount];
+
+  const ratios = [1];
+  for (let i = 1; i < setCount; i++) {
+    ratios.push(Math.max(0.82, 1 - i * 0.025));
+  }
+  return ratios;
+}
+
+function buildSetWeightSuggestions(exerciseName, setCount, baselineWeight) {
+  const numericBaseline = parseFloat(baselineWeight);
+  if (!Number.isFinite(numericBaseline) || numericBaseline <= 0) return [];
+
+  const increment = EXERCISE_RULES[exerciseName] ?? 5;
+  if (increment === 0) {
+    return Array.from({ length: setCount }, () => formatSuggestedWeight(numericBaseline));
+  }
+
+  return getSetSuggestionRatios(setCount).map((ratio, index) => {
+    if (index === 0) return formatSuggestedWeight(roundToIncrement(numericBaseline, increment));
+    return formatSuggestedWeight(roundToIncrement(numericBaseline * ratio, increment));
+  });
 }
 
 function bindBlurSave(id, handler) {
@@ -777,6 +833,7 @@ function calcPowerData(workoutsInput = state.workouts || [], options = {}) {
 
 function renderPowerPanel() {
   const panel = document.getElementById("powerPanel");
+  if (!panel) return;
   const p = calcPowerData();
   const sparkBars = p.history.length
     ? p.history.map(point => {
@@ -899,6 +956,7 @@ function saveUserMax(field, value) {
 
 function renderMaxesPanel() {
   const panel = document.getElementById("maxesPanel");
+  if (!panel) return;
   const m = state.userMaxes || USER_MAXES_DEFAULT;
 
   panel.innerHTML = `
@@ -956,18 +1014,13 @@ function saveBodyMetric(field, value) {
 }
 
 function renderBodyMetricsPanel() {
-  let panel = document.getElementById("bodyMetricsPanel");
-  if (!panel) {
-    panel = document.createElement("div");
-    panel.id = "bodyMetricsPanel";
-    panel.style.marginTop = "12px";
-    panel.style.padding = "12px";
-    panel.style.border = "1px solid var(--border)";
-    panel.style.borderRadius = "16px";
-    panel.style.background = "rgba(255,255,255,.025)";
-    const hero = document.querySelector(".hero");
-    hero.appendChild(panel);
-  }
+  const panel = document.getElementById("bodyMetricsPanel");
+  if (!panel) return;
+  panel.style.marginTop = "12px";
+  panel.style.padding = "12px";
+  panel.style.border = "1px solid var(--border)";
+  panel.style.borderRadius = "16px";
+  panel.style.background = "rgba(255,255,255,.025)";
 
   const b = state.bodyMetrics || BODY_METRICS_DEFAULT;
   const body = calcBodyData();
@@ -1059,6 +1112,8 @@ function getDraftForDay(day) {
 }
 
 function attachDraftAutoSave() {
+  const exList = document.getElementById("exList");
+  if (!exList) return;
   document.querySelectorAll("#exList input, #exList select").forEach(el => {
     el.addEventListener("input", persistDraftForDay);
     el.addEventListener("change", persistDraftForDay);
@@ -1332,29 +1387,102 @@ function collapseAll() {
   renderWorkout();
 }
 
-function rebuildSetRows(body, count, suggested, entryValues = []) {
+function rebuildSetRows(body, count, suggested, entryValues = [], exerciseName = "") {
   body.querySelectorAll(".setRow").forEach(row => row.remove());
 
   for (let i = 0; i < count; i++) {
     const entry = entryValues[i] || {};
     const row = document.createElement("div");
     row.className = "setRow";
+    row.dataset.index = String(i);
     row.innerHTML = `
-      <span>Set ${i + 1}</span>
-      <input class="weight" placeholder="weight" value="${entry.weight ?? suggested ?? ""}">
+      <div class="set-label">
+        <span>Set ${i + 1}</span>
+        <small>${i === 0 ? "Baseline" : "Follow-up"}</small>
+      </div>
+      <input class="weight" placeholder="${i === 0 ? (suggested || "weight") : "set 1 drives suggestion"}" value="${entry.weight ?? (i === 0 ? (suggested ?? "") : "")}">
       <input class="reps" placeholder="reps" value="${entry.reps ?? ""}">
+      <div class="set-suggestion${i === 0 && suggested ? " ready" : ""}"><strong>${i === 0 ? `Open with ${suggested || "your working weight"}` : "Enter set 1 weight"}</strong><span>${i === 0 ? "Use your target working load as the baseline." : "Suggestions for later sets will update automatically."}</span></div>
       <button class="ghost rest-btn" type="button">Rest</button>
     `;
     row.querySelector(".rest-btn").onclick = () => startRestTimer(90);
     body.appendChild(row);
   }
+
+  wireSetSuggestionInputs(body, exerciseName, suggested);
 }
 
-function applyPresetToRows(body, value) {
-  body.querySelectorAll(".weight").forEach(input => {
-    input.value = value;
+function updateSetSuggestionUI(body, exerciseName, fallbackSuggested = "") {
+  const rows = [...body.querySelectorAll(".setRow")];
+  if (!rows.length) return;
+
+  const baselineInput = rows[0].querySelector(".weight");
+  const baselineWeight = baselineInput?.value.trim() || fallbackSuggested || "";
+  const suggestions = buildSetWeightSuggestions(exerciseName, rows.length, baselineWeight);
+
+  rows.forEach((row, index) => {
+    const input = row.querySelector(".weight");
+    const box = row.querySelector(".set-suggestion");
+    if (!input || !box) return;
+
+    if (index === 0) {
+      const starter = fallbackSuggested || "your working weight";
+      box.classList.toggle("ready", Boolean(baselineInput?.value.trim() || fallbackSuggested));
+      box.innerHTML = `<strong>${baselineInput?.value.trim() ? `Baseline ${baselineInput.value.trim()}` : `Open with ${starter}`}</strong><span>${baselineInput?.value.trim() ? "Remaining set suggestions are now anchored to set 1." : "Use your target working load as the baseline."}</span>`;
+      return;
+    }
+
+    const suggestion = suggestions[index] || "";
+    if (suggestion && !input.value.trim()) {
+      input.placeholder = suggestion;
+    }
+    box.classList.toggle("ready", Boolean(suggestion));
+    box.innerHTML = suggestion
+      ? `<strong>${suggestion}</strong><span>Suggested from your set 1 load.</span>`
+      : `<strong>Enter set 1 weight</strong><span>Later-set suggestions will appear here.</span>`;
   });
+}
+
+function wireSetSuggestionInputs(body, exerciseName, fallbackSuggested = "") {
+  const rows = [...body.querySelectorAll(".setRow")];
+  if (!rows.length) return;
+
+  const baselineInput = rows[0].querySelector(".weight");
+  baselineInput?.addEventListener("input", () => {
+    const suggestions = buildSetWeightSuggestions(exerciseName, rows.length, baselineInput.value.trim());
+    rows.forEach((row, index) => {
+      const input = row.querySelector(".weight");
+      if (!input || index === 0) return;
+      const nextSuggestion = suggestions[index] || "";
+      if (!input.value.trim()) {
+        input.value = nextSuggestion;
+      }
+    });
+    updateSetSuggestionUI(body, exerciseName, fallbackSuggested);
+    persistDraftForDay();
+    renderTrackerProgress();
+  });
+
+  rows.forEach(row => {
+    row.querySelectorAll("input").forEach(input => {
+      input.addEventListener("input", () => {
+        updateSetSuggestionUI(body, exerciseName, fallbackSuggested);
+        renderTrackerProgress();
+      });
+    });
+  });
+
+  updateSetSuggestionUI(body, exerciseName, fallbackSuggested);
+}
+
+function applyPresetToRows(body, value, exerciseName = "") {
+  const weights = body.querySelectorAll(".weight");
+  weights.forEach((input, index) => {
+    input.value = index === 0 ? value : input.value;
+  });
+  updateSetSuggestionUI(body, exerciseName, value);
   persistDraftForDay();
+  renderTrackerProgress();
 }
 
 // ==============================
@@ -1363,6 +1491,7 @@ function applyPresetToRows(body, value) {
 
 function renderTabs() {
   const tabbar = document.getElementById("tabbar");
+  if (!tabbar) return;
   tabbar.innerHTML = "";
 
   ROUTINE.forEach(day => {
@@ -1375,14 +1504,61 @@ function renderTabs() {
 }
 
 function renderStats() {
-  document.getElementById("nextStat").textContent = state.nextWorkout || "—";
-  document.getElementById("sessionsStat").textContent = state.workouts.length;
-  document.getElementById("streakStat").textContent = calcStreakDays(state.workouts);
-  document.getElementById("lastStat").textContent = state.workouts[0]?.name || "—";
+  const nextEl = document.getElementById("nextStat");
+  const sessionsEl = document.getElementById("sessionsStat");
+  const streakEl = document.getElementById("streakStat");
+  const lastEl = document.getElementById("lastStat");
+  if (!nextEl || !sessionsEl || !streakEl || !lastEl) return;
+
+  nextEl.textContent = state.nextWorkout || "—";
+  sessionsEl.textContent = state.workouts.length;
+  streakEl.textContent = calcStreakDays(state.workouts);
+  lastEl.textContent = state.workouts[0]?.name || "—";
+}
+
+function renderTrackerProgress() {
+  const panel = document.getElementById("trackerProgress");
+  if (!panel) return;
+
+  const rows = [...document.querySelectorAll(".setRow")];
+  const totalSets = rows.length || exercises.reduce((sum, ex) => sum + (parseInt(ex.sets, 10) || 0), 0);
+  const completedSets = rows.filter(row => row.querySelector(".weight")?.value.trim() && row.querySelector(".reps")?.value.trim()).length;
+  const completion = totalSets ? Math.round((completedSets / totalSets) * 100) : 0;
+  const remaining = Math.max(totalSets - completedSets, 0);
+  const nextPrompt = totalSets
+    ? remaining === 0
+      ? "All planned sets are logged. Save the workout when you're ready."
+      : `${remaining} set${remaining === 1 ? "" : "s"} left to complete this session.`
+    : "Load a workout day to start tracking session progress.";
+
+  panel.innerHTML = `
+    <section class="progress-card">
+      <div class="progress-head">
+        <div>
+          <div class="progress-kicker">Live Session Progress</div>
+          <div class="progress-title">${completedSets}/${totalSets || 0} sets logged</div>
+          <div class="progress-copy">A quick completion view keeps the session easier to scan while you train.</div>
+        </div>
+        <div class="progress-pill-row">
+          <div class="progress-pill"><span>Completion</span><strong>${completion}%</strong></div>
+          <div class="progress-pill"><span>Planned Sets</span><strong>${totalSets || 0}</strong></div>
+          <div class="progress-pill"><span>Remaining</span><strong>${remaining}</strong></div>
+        </div>
+      </div>
+      <div class="progress-track-wrap">
+        <div class="progress-track"><div class="progress-fill" style="width:${completion}%"></div></div>
+      </div>
+      <div class="progress-foot">
+        <span>${nextPrompt}</span>
+        <span>${selectedDay || state.nextWorkout || ""}</span>
+      </div>
+    </section>
+  `;
 }
 
 function renderHistory() {
   const list = document.getElementById("histList");
+  if (!list) return;
   list.innerHTML = "";
 
   if (!state.workouts.length) {
@@ -1424,6 +1600,7 @@ function renderHistory() {
 
 function renderExerciseToolbar() {
   const toolbar = document.getElementById("exerciseToolbar");
+  if (!toolbar) return;
   const options = getDayOptions(selectedDay);
   const first = options[0] || "";
 
@@ -1495,7 +1672,7 @@ function renderWorkout(draft = null) {
       </div>
       <button class="ghost" type="button">↑ Up</button>
       <button class="ghost" type="button">↓ Down</button>
-      <button class="ghost" type="button">Remove</button>
+      <button class="danger" type="button">Delete</button>
     `;
 
 const presetRow = document.createElement("div");
@@ -1522,7 +1699,7 @@ body.appendChild(editGrid);
 body.appendChild(presetRow);
 body.appendChild(demoRow);
 
-    rebuildSetRows(body, ex.sets, suggested.value, draftEx?.entries || []);
+    rebuildSetRows(body, ex.sets, suggested.value, draftEx?.entries || [], ex.name);
 
     const selectInput = editGrid.querySelector(".edit-select");
     const setsInput = editGrid.querySelector(".edit-sets");
@@ -1573,7 +1750,7 @@ const demoBtn = demoRow.querySelector("button");
     };
 
     usePresetBtn.onclick = () => {
-      applyPresetToRows(body, presetInput.value.trim());
+      applyPresetToRows(body, presetInput.value.trim(), selectInput.value || ex.name);
     };
 demoBtn.onclick = () => {
   openExerciseDemo(selectInput.value || ex.name);
@@ -1584,6 +1761,7 @@ demoBtn.onclick = () => {
   });
 
   attachDraftAutoSave();
+  renderTrackerProgress();
 }
 
 // ==============================
@@ -1664,6 +1842,7 @@ function clearSession() {
   document.getElementById("focusNotes").value = "";
   document.getElementById("wkNotes").value = "";
   renderWorkout();
+  renderTrackerProgress();
   stopSessionTimer();
 }
 
@@ -1703,6 +1882,8 @@ function exportLog() {
 // ==============================
 
 function wireButtons() {
+  if (currentPage !== "workout") return;
+
   document.getElementById("saveBtn").onclick = saveWorkout;
   document.getElementById("loadNextBtn").onclick = () => loadTemplate(state.nextWorkout);
   document.getElementById("loadTplBtn").onclick = () => {
@@ -1742,14 +1923,18 @@ function wireButtons() {
 // INIT
 // ==============================
 
-function init() {
+function initPowerPage() {
+  renderStats();
+  renderPowerPanel();
+  renderMaxesPanel();
+  renderBodyMetricsPanel();
+}
+
+function initWorkoutPage() {
   document.getElementById("wkDate").value = todayString();
   renderTabs();
   renderStats();
   renderHistory();
-  renderPowerPanel();
-  renderMaxesPanel();
-  renderBodyMetricsPanel();
   wireButtons();
   updateRestTimerUI();
   loadTemplate(state.nextWorkout);
@@ -1757,6 +1942,15 @@ function init() {
   window.addEventListener("beforeunload", () => {
     persistDraftForDay();
   });
+}
+
+function init() {
+  if (currentPage === "power") {
+    initPowerPage();
+    return;
+  }
+
+  initWorkoutPage();
 }
 
 init();

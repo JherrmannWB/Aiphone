@@ -448,6 +448,56 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
   grid-template-columns:1.2fr .9fr .9fr;
 }
 
+.power-rank-ladder{
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:6px;
+  margin-top:12px;
+}
+
+.power-rank-step{
+  text-align:center;
+  padding:8px 4px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:rgba(255,255,255,.02);
+}
+
+.power-rank-step strong{
+  display:block;
+  font-family:'Rajdhani',sans-serif;
+  font-size:1.05rem;
+  color:var(--dim);
+}
+
+.power-rank-step span{
+  display:block;
+  margin-top:2px;
+  font-size:.62rem;
+  color:var(--dim);
+}
+
+.power-rank-step.done strong{
+  color:#a8c1b1;
+}
+
+.power-rank-step.done span{
+  color:var(--muted);
+}
+
+.power-rank-step.active{
+  border-color:#876f46;
+  background:linear-gradient(180deg, rgba(200,169,107,.16), rgba(200,169,107,.05));
+}
+
+.power-rank-step.active strong{
+  color:var(--gold);
+}
+
+.power-rank-step.active span{
+  color:var(--muted);
+}
+
 .power-sparkline{
   min-height:110px;
   display:flex;
@@ -466,6 +516,12 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
 .power-spark-item span{
   color:var(--muted);
   font-size:.72rem;
+}
+
+.power-spark-value{
+  font-family:'DM Mono',monospace;
+  font-size:.66rem;
+  color:var(--muted);
 }
 
 .power-spark-bar{
@@ -741,6 +797,9 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
   .power-stat-chip-wrap,
   #maxesBody > div{
     grid-template-columns:1fr !important;
+  }
+  .power-rank-ladder{
+    grid-template-columns:repeat(4,minmax(0,1fr));
   }
 }
 body[data-page="power"] .wrap,

@@ -325,8 +325,24 @@ function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+function formatDateLocal(dt) {
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const d = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function todayString() {
-  return new Date().toISOString().split("T")[0];
+  return formatDateLocal(new Date());
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function formatTime(totalSeconds) {
@@ -461,7 +477,9 @@ function est1RM(weight, reps) {
   const w = parseFloat(weight);
   const r = parseFloat(reps);
   if (isNaN(w) || isNaN(r) || w <= 0 || r <= 0) return 0;
-  return w * (1 + r / 30);
+  // Epley loses accuracy past ~12 reps, so cap the rep term to keep
+  // high-rep accessory sets from inflating the estimated max
+  return w * (1 + Math.min(r, 12) / 30);
 }
 
 function calcTotalVolume(workouts) {
@@ -504,9 +522,9 @@ function calcStreakDays(workouts) {
   for (const d of dates) {
     if (d === expected) {
       streak++;
-      const dt = new Date(expected);
+      const dt = new Date(`${expected}T00:00:00`);
       dt.setDate(dt.getDate() - 1);
-      expected = dt.toISOString().split("T")[0];
+      expected = formatDateLocal(dt);
     } else if (d < expected) {
       break;
     }
@@ -547,7 +565,7 @@ function calcWeeklyConsistency(workouts, weeks = 4) {
     }).length;
 
     buckets.unshift({
-      label: `${start.toISOString().split("T")[0].slice(5)}–${end.toISOString().split("T")[0].slice(5)}`,
+      label: `${formatDateLocal(start).slice(5)}–${formatDateLocal(end).slice(5)}`,
       count
     });
   }
@@ -835,18 +853,31 @@ function renderPowerPanel() {
   const panel = document.getElementById("powerPanel");
   if (!panel) return;
   const p = calcPowerData();
+  const maxScore = Math.max(...p.history.map(item => item.score), 1);
   const sparkBars = p.history.length
     ? p.history.map(point => {
-        const maxScore = Math.max(...p.history.map(item => item.score), 1);
         const height = Math.max(18, Math.round((point.score / maxScore) * 72));
         return `
-          <div class="power-spark-item">
+          <div class="power-spark-item" title="${escapeHtml(point.name)} · ${point.date} · ${point.score.toLocaleString()}">
+            <span class="power-spark-value">${point.score.toLocaleString()}</span>
             <div class="power-spark-bar" style="height:${height}px"></div>
             <span>${point.date.slice(5)}</span>
           </div>
         `;
       }).join("")
     : '<div class="power-empty">Save a workout to unlock score trend tracking.</div>';
+
+  const rankLadder = RANKS.map(r => {
+    const stateClass = r.rank === p.rank.current.rank
+      ? " active"
+      : r.min < p.rank.current.min ? " done" : "";
+    return `
+      <div class="power-rank-step${stateClass}">
+        <strong>${r.rank}</strong>
+        <span>${r.min.toLocaleString()}+</span>
+      </div>
+    `;
+  }).join("");
 
   const breakdownCards = p.breakdown
     .map(item => `
@@ -903,6 +934,7 @@ function renderPowerPanel() {
           <div class="power-progress-track">
             <div class="power-progress-fill" style="width:${p.rank.progress}%"></div>
           </div>
+          <div class="power-rank-ladder">${rankLadder}</div>
         </div>
       </section>
 
@@ -1400,8 +1432,8 @@ function rebuildSetRows(body, count, suggested, entryValues = [], exerciseName =
         <span>Set ${i + 1}</span>
         <small>${i === 0 ? "Baseline" : "Follow-up"}</small>
       </div>
-      <input class="weight" placeholder="${i === 0 ? (suggested || "weight") : "set 1 drives suggestion"}" value="${entry.weight ?? (i === 0 ? (suggested ?? "") : "")}">
-      <input class="reps" placeholder="reps" value="${entry.reps ?? ""}">
+      <input class="weight" placeholder="${escapeHtml(i === 0 ? (suggested || "weight") : "set 1 drives suggestion")}" value="${escapeHtml(entry.weight ?? (i === 0 ? (suggested ?? "") : ""))}">
+      <input class="reps" placeholder="reps" value="${escapeHtml(entry.reps ?? "")}">
       <div class="set-suggestion${i === 0 && suggested ? " ready" : ""}"><strong>${i === 0 ? `Open with ${suggested || "your working weight"}` : "Enter set 1 weight"}</strong><span>${i === 0 ? "Use your target working load as the baseline." : "Suggestions for later sets will update automatically."}</span></div>
       <button class="ghost rest-btn" type="button">Rest</button>
     `;
@@ -1570,16 +1602,16 @@ function renderHistory() {
     const item = document.createElement("div");
     item.className = "hist-item";
 
-    const exerciseNames = (workout.exercises || []).map(e => e.name).slice(0, 3).join(", ");
+    const exerciseNames = (workout.exercises || []).map(e => escapeHtml(e.name)).slice(0, 3).join(", ");
 
     item.innerHTML = `
       <div class="hist-head">
         <div>
-          <strong>${workout.name}</strong>
-          <div class="hist-meta">${workout.date || ""}${workout.bodyWeight ? ` · BW ${workout.bodyWeight}` : ""}</div>
+          <strong>${escapeHtml(workout.name)}</strong>
+          <div class="hist-meta">${escapeHtml(workout.date || "")}${workout.bodyWeight ? ` · BW ${escapeHtml(workout.bodyWeight)}` : ""}</div>
           <div class="history-detail">${exerciseNames}${(workout.exercises || []).length > 3 ? "..." : ""}</div>
-          ${workout.focusNotes ? `<div class="history-detail">Focus: ${workout.focusNotes}</div>` : ""}
-          ${workout.notes ? `<div class="history-detail">Notes: ${workout.notes}</div>` : ""}
+          ${workout.focusNotes ? `<div class="history-detail">Focus: ${escapeHtml(workout.focusNotes)}</div>` : ""}
+          ${workout.notes ? `<div class="history-detail">Notes: ${escapeHtml(workout.notes)}</div>` : ""}
         </div>
         <button class="ghost mini" type="button" data-del="${index}">Delete</button>
       </div>
@@ -1591,6 +1623,9 @@ function renderHistory() {
   list.querySelectorAll("[data-del]").forEach(btn => {
     btn.onclick = () => {
       const idx = Number(btn.dataset.del);
+      const target = state.workouts[idx];
+      if (!target) return;
+      if (!confirm(`Delete "${target.name}"${target.date ? ` from ${target.date}` : ""}? This can't be undone.`)) return;
       state.workouts.splice(idx, 1);
       saveState();
       showToast("Workout deleted");
@@ -1680,7 +1715,7 @@ presetRow.className = "preset-row";
 presetRow.innerHTML = `
   <div>
     <label>Preset / fallback weight</label>
-    <input class="preset-weight" value="${ex.startWeight || ""}" placeholder="135">
+    <input class="preset-weight" value="${escapeHtml(ex.startWeight || "")}" placeholder="135">
   </div>
   <button class="ghost" type="button">Use Preset</button>
   <div class="exercise-suggest">Suggested: ${suggested.value || "—"}<br><small>${suggested.reason}</small></div>
@@ -1877,6 +1912,49 @@ function exportLog() {
   showToast("Log exported");
 }
 
+function importLog(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(reader.result);
+    } catch {
+      showToast("Could not read that file", "warn");
+      return;
+    }
+
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.workouts)) {
+      showToast("That file doesn't look like an exported log", "warn");
+      return;
+    }
+
+    const count = parsed.workouts.length;
+    if (!confirm(`Import ${count} workout${count === 1 ? "" : "s"}? This replaces the data currently saved on this device.`)) return;
+
+    state = {
+      workouts: parsed.workouts,
+      nextWorkout: ROUTINE.includes(parsed.nextWorkout) ? parsed.nextWorkout : "Push A",
+      customLayouts: parsed.customLayouts && typeof parsed.customLayouts === "object" ? parsed.customLayouts : {},
+      drafts: parsed.drafts && typeof parsed.drafts === "object" ? parsed.drafts : {},
+      userMaxes: parsed.userMaxes && typeof parsed.userMaxes === "object"
+        ? { ...USER_MAXES_DEFAULT, ...parsed.userMaxes }
+        : { ...USER_MAXES_DEFAULT },
+      bodyMetrics: parsed.bodyMetrics && typeof parsed.bodyMetrics === "object"
+        ? { ...BODY_METRICS_DEFAULT, ...parsed.bodyMetrics }
+        : { ...BODY_METRICS_DEFAULT }
+    };
+
+    saveState();
+    if (currentPage === "workout") {
+      stopSessionTimer();
+      loadTemplate(state.nextWorkout);
+    }
+    showToast(`Imported ${count} workout${count === 1 ? "" : "s"}`, "success");
+  };
+  reader.onerror = () => showToast("Could not read that file", "warn");
+  reader.readAsText(file);
+}
+
 // ==============================
 // BUTTONS
 // ==============================
@@ -1896,6 +1974,12 @@ function wireButtons() {
   document.getElementById("expandAllBtn").onclick = expandAll;
   document.getElementById("collapseAllBtn").onclick = collapseAll;
   document.getElementById("exportBtn").onclick = exportLog;
+  document.getElementById("importBtn").onclick = () => document.getElementById("importFile").click();
+  document.getElementById("importFile").onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) importLog(file);
+    e.target.value = "";
+  };
 
   document.getElementById("sessionPauseBtn").onclick = toggleSessionPause;
   document.getElementById("sessionResetBtn").onclick = resetSessionTimer;

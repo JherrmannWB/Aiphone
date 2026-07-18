@@ -21,6 +21,11 @@ const SPLITS = {
     label: "Push / Pull / Legs",
     frequency: "5–6 days / week",
     routine: ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"]
+  },
+  rehab: {
+    label: "Rehab Bodybuilding",
+    frequency: "3–4 days / week",
+    routine: ["Rehab Upper A", "Rehab Lower A", "Rehab Upper B", "Rehab Lower B"]
   }
 };
 
@@ -129,6 +134,47 @@ const TEMPLATES = {
     { name: "Hip Thrust", sets: 3, reps: 10, startWeight: "135", collapsed: true },
     { name: "Leg Extension", sets: 3, reps: 12, startWeight: "100", collapsed: true },
     { name: "Seated Calf Raise", sets: 4, reps: 15, startWeight: "90", collapsed: true }
+  ],
+  // Rehab Bodybuilding: posture primers open every session, pressing is
+  // machine-biased and pulling neutral-grip to spare the bicep tendon,
+  // and curls are slow-eccentric tendon loading
+  "Rehab Upper A": [
+    { name: "Chin Tuck", sets: 2, reps: 10, startWeight: "", collapsed: false },
+    { name: "Band Pull-Apart", sets: 2, reps: 15, startWeight: "", collapsed: true },
+    { name: "Machine Press", sets: 3, reps: 10, startWeight: "90", collapsed: true },
+    { name: "Machine Shoulder Press", sets: 3, reps: 10, startWeight: "70", collapsed: true },
+    { name: "Pec Deck", sets: 3, reps: 12, startWeight: "100", collapsed: true },
+    { name: "Prone Y Raise", sets: 3, reps: 12, startWeight: "5", collapsed: true },
+    { name: "Face Pull", sets: 3, reps: 15, startWeight: "30", collapsed: true },
+    { name: "Eccentric Curl (Slow Negatives)", sets: 2, reps: 12, startWeight: "15", collapsed: true }
+  ],
+  "Rehab Lower A": [
+    { name: "Chin Tuck", sets: 2, reps: 10, startWeight: "", collapsed: false },
+    { name: "Thoracic Extension (Foam Roller)", sets: 2, reps: 10, startWeight: "", collapsed: true },
+    { name: "Back Squat", sets: 3, reps: 8, startWeight: "185", collapsed: true },
+    { name: "Romanian Deadlift", sets: 3, reps: 10, startWeight: "135", collapsed: true },
+    { name: "Seated Leg Curl", sets: 3, reps: 12, startWeight: "95", collapsed: true },
+    { name: "Standing Calf Raise", sets: 3, reps: 15, startWeight: "135", collapsed: true },
+    { name: "Wall Slide", sets: 2, reps: 10, startWeight: "", collapsed: true }
+  ],
+  "Rehab Upper B": [
+    { name: "Chin Tuck", sets: 2, reps: 10, startWeight: "", collapsed: false },
+    { name: "Wall Slide", sets: 2, reps: 10, startWeight: "", collapsed: true },
+    { name: "Chest Supported Row", sets: 3, reps: 12, startWeight: "90", collapsed: true },
+    { name: "Lat Pulldown", sets: 3, reps: 10, startWeight: "100", collapsed: true },
+    { name: "Rear Delt Fly", sets: 3, reps: 15, startWeight: "20", collapsed: true },
+    { name: "Cable External Rotation", sets: 3, reps: 12, startWeight: "10", collapsed: true },
+    { name: "Incline Dumbbell Curl", sets: 3, reps: 12, startWeight: "20", collapsed: true },
+    { name: "Band Pull-Apart", sets: 2, reps: 15, startWeight: "", collapsed: true }
+  ],
+  "Rehab Lower B": [
+    { name: "Chin Tuck", sets: 2, reps: 10, startWeight: "", collapsed: false },
+    { name: "Thoracic Extension (Foam Roller)", sets: 2, reps: 10, startWeight: "", collapsed: true },
+    { name: "Hip Thrust", sets: 3, reps: 10, startWeight: "135", collapsed: true },
+    { name: "Bulgarian Split Squat", sets: 3, reps: 10, startWeight: "25", collapsed: true },
+    { name: "Leg Extension", sets: 3, reps: 12, startWeight: "100", collapsed: true },
+    { name: "Seated Calf Raise", sets: 3, reps: 15, startWeight: "90", collapsed: true },
+    { name: "Prone Y Raise", sets: 2, reps: 12, startWeight: "5", collapsed: true }
   ]
 };
 
@@ -194,7 +240,15 @@ const EXERCISE_DEFAULTS = {
   "Bulgarian Split Squat": { sets: 3, reps: 10, startWeight: "25" },
   "Hip Thrust": { sets: 3, reps: 10, startWeight: "135" },
   "Leg Extension": { sets: 3, reps: 12, startWeight: "100" },
-  "Seated Calf Raise": { sets: 4, reps: 15, startWeight: "90" }
+  "Seated Calf Raise": { sets: 4, reps: 15, startWeight: "90" },
+  "Chin Tuck": { sets: 2, reps: 10, startWeight: "" },
+  "Band Pull-Apart": { sets: 2, reps: 15, startWeight: "" },
+  "Wall Slide": { sets: 2, reps: 10, startWeight: "" },
+  "Thoracic Extension (Foam Roller)": { sets: 2, reps: 10, startWeight: "" },
+  "Prone Y Raise": { sets: 3, reps: 12, startWeight: "5" },
+  "Cable External Rotation": { sets: 3, reps: 12, startWeight: "10" },
+  "Eccentric Curl (Slow Negatives)": { sets: 2, reps: 12, startWeight: "15" },
+  "Incline Dumbbell Curl": { sets: 3, reps: 12, startWeight: "20" }
 };
 
 const EXERCISE_RULES = {
@@ -232,7 +286,15 @@ const EXERCISE_RULES = {
   "Bulgarian Split Squat": 5,
   "Hip Thrust": 10,
   "Leg Extension": 10,
-  "Seated Calf Raise": 10
+  "Seated Calf Raise": 10,
+  "Chin Tuck": 0,
+  "Band Pull-Apart": 0,
+  "Wall Slide": 0,
+  "Thoracic Extension (Foam Roller)": 0,
+  "Prone Y Raise": 5,
+  "Cable External Rotation": 5,
+  "Eccentric Curl (Slow Negatives)": 5,
+  "Incline Dumbbell Curl": 5
 };
 
 const EXERCISE_MUSCLES = {
@@ -270,7 +332,15 @@ const EXERCISE_MUSCLES = {
   "Seated Leg Curl": ["hamstrings"],
   "Hip Thrust": ["hamstrings"],
   "Standing Calf Raise": ["calves"],
-  "Seated Calf Raise": ["calves"]
+  "Seated Calf Raise": ["calves"],
+  "Chin Tuck": ["rehab"],
+  "Band Pull-Apart": ["rehab"],
+  "Wall Slide": ["rehab"],
+  "Thoracic Extension (Foam Roller)": ["rehab"],
+  "Prone Y Raise": ["rehab", "shoulders"],
+  "Cable External Rotation": ["rehab"],
+  "Eccentric Curl (Slow Negatives)": ["rehab", "arms"],
+  "Incline Dumbbell Curl": ["arms"]
 };
 
 // Weekly hard-set targets per muscle group (evidence-based hypertrophy ranges)
@@ -281,7 +351,10 @@ const MUSCLE_TARGETS = {
   arms: { label: "Arms", min: 8, max: 16 },
   quads: { label: "Quads", min: 8, max: 16 },
   hamstrings: { label: "Hams / Glutes", min: 8, max: 16 },
-  calves: { label: "Calves", min: 6, max: 12 }
+  calves: { label: "Calves", min: 6, max: 12 },
+  // Rehab compliance target — only surfaced on the rehab split or when
+  // rehab work was actually logged in the trailing week
+  rehab: { label: "Rehab / Posture", min: 8, max: 30 }
 };
 
 // PPL default keeps continuity for anyone already mid-rotation
@@ -358,7 +431,15 @@ const EXERCISE_VIDEO_SEARCH = {
   "Bulgarian Split Squat": "https://www.youtube.com/results?search_query=Jeff+Nippard+bulgarian+split+squat+tutorial",
   "Hip Thrust": "https://www.youtube.com/results?search_query=Jeff+Nippard+hip+thrust+tutorial",
   "Leg Extension": "https://www.youtube.com/results?search_query=leg+extension+tutorial",
-  "Seated Calf Raise": "https://www.youtube.com/results?search_query=seated+calf+raise+tutorial"
+  "Seated Calf Raise": "https://www.youtube.com/results?search_query=seated+calf+raise+tutorial",
+  "Chin Tuck": "https://www.youtube.com/results?search_query=chin+tuck+exercise+forward+head+posture",
+  "Band Pull-Apart": "https://www.youtube.com/results?search_query=band+pull+apart+posture+tutorial",
+  "Wall Slide": "https://www.youtube.com/results?search_query=scapular+wall+slide+exercise+tutorial",
+  "Thoracic Extension (Foam Roller)": "https://www.youtube.com/results?search_query=thoracic+extension+foam+roller+exercise",
+  "Prone Y Raise": "https://www.youtube.com/results?search_query=prone+Y+raise+lower+trap+exercise",
+  "Cable External Rotation": "https://www.youtube.com/results?search_query=cable+external+rotation+rotator+cuff+exercise",
+  "Eccentric Curl (Slow Negatives)": "https://www.youtube.com/results?search_query=eccentric+bicep+curl+tendonitis+rehab",
+  "Incline Dumbbell Curl": "https://www.youtube.com/results?search_query=Jeff+Nippard+incline+dumbbell+curl"
 };
 
 // ==============================
@@ -508,7 +589,13 @@ function normalizeExerciseName(name) {
 function namesMatch(a, b) {
   const aa = normalizeExerciseName(a);
   const bb = normalizeExerciseName(b);
-  return aa === bb || aa.includes(bb) || bb.includes(aa);
+  if (aa === bb) return true;
+  // Containment only counts when the contained name is specific enough
+  // (two+ words) — otherwise "curl" would match every curl variant and
+  // rehab movements would inherit heavy-lift history
+  const shorter = aa.length <= bb.length ? aa : bb;
+  const longer = aa.length <= bb.length ? bb : aa;
+  return shorter.split(" ").length >= 2 && longer.includes(shorter);
 }
 
 function nextWorkout(day) {
@@ -1548,7 +1635,7 @@ function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetRe
       value: String(weight),
       reason: allAtTop
         ? `Every set reached ${repHigh}+ reps — add a rep per set or slow the tempo to keep progressing.`
-        : `Bodyweight movement: build each set toward ${repHigh} reps before adding load.`
+        : `Bodyweight / band movement: build each set toward ${repHigh} controlled reps before adding load.`
     };
   }
 
@@ -1696,6 +1783,13 @@ function calcVolumeStatus(sets, target) {
   return { key: "none", label: "Untrained" };
 }
 
+function activeMuscleTargets(muscleSets) {
+  return Object.entries(MUSCLE_TARGETS).filter(([key]) => {
+    if (key !== "rehab") return true;
+    return state.settings?.split === "rehab" || (muscleSets[key] || 0) > 0;
+  });
+}
+
 function buildCoachTip(weeklySessions, muscleSets) {
   const daysGoal = state.settings?.daysPerWeek || SETTINGS_DEFAULT.daysPerWeek;
 
@@ -1704,7 +1798,7 @@ function buildCoachTip(weeklySessions, muscleSets) {
   }
 
   if (weeklySessions >= daysGoal) {
-    const gaps = Object.entries(MUSCLE_TARGETS)
+    const gaps = activeMuscleTargets(muscleSets)
       .filter(([key, target]) => muscleSets[key] < target.min)
       .sort((a, b) => (muscleSets[a[0]] / a[1].min) - (muscleSets[b[0]] / b[1].min));
     if (gaps.length) {
@@ -2261,7 +2355,8 @@ function renderCoachPanel() {
   const pace = Math.max(0, Math.min(100, Math.round((weeklySessions / settings.daysPerWeek) * 100)));
   const tip = buildCoachTip(weeklySessions, muscleSets);
   const recommendedSplit = splitForDays(settings.daysPerWeek);
-  const splitMismatch = recommendedSplit !== settings.split;
+  // Rehab is a deliberate therapeutic choice — never suggest switching away
+  const splitMismatch = settings.split !== "rehab" && recommendedSplit !== settings.split;
 
   const dayOptions = [2, 3, 4, 5, 6]
     .map(n => `<option value="${n}" ${n === settings.daysPerWeek ? "selected" : ""}>${n} days / week</option>`)
@@ -2271,7 +2366,7 @@ function renderCoachPanel() {
     .map(([key, s]) => `<option value="${key}" ${key === settings.split ? "selected" : ""}>${s.label} (${s.frequency})</option>`)
     .join("");
 
-  const volumeBars = Object.entries(MUSCLE_TARGETS).map(([key, target]) => {
+  const volumeBars = activeMuscleTargets(muscleSets).map(([key, target]) => {
     const sets = muscleSets[key] || 0;
     const status = calcVolumeStatus(sets, target);
     const fill = Math.max(0, Math.min(100, Math.round((sets / target.max) * 100)));
@@ -2315,7 +2410,9 @@ function renderCoachPanel() {
         <div class="coach-settings-note">
           ${splitMismatch
             ? `For ${settings.daysPerWeek} days/week, ${SPLITS[recommendedSplit].label} usually fits best. <button class="ghost mini" id="coachApplySplitBtn" type="button">Switch</button>`
-            : "Split matches your schedule. The rotation continues from wherever you left off — no week is ever wasted."}
+            : settings.split === "rehab"
+              ? "Rehab mode: elbow-friendly pressing, neutral-grip pulling, slow-eccentric curls for the bicep tendon, and chin tucks / thoracic work for head posture in every session. Stop any set that causes sharp pain."
+              : "Split matches your schedule. The rotation continues from wherever you left off — no week is ever wasted."}
         </div>
       </div>
 

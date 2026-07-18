@@ -6,14 +6,34 @@ const STORAGE_KEY = "power_calculator_v3";
 
 const currentPage = document.body?.dataset?.page || "workout";
 
-const ROUTINE = [
-  "Push A",
-  "Pull A",
-  "Legs A",
-  "Push B",
-  "Pull B",
-  "Legs B"
-];
+const SPLITS = {
+  fullbody: {
+    label: "Full Body",
+    frequency: "2–3 days / week",
+    routine: ["Full Body A", "Full Body B"]
+  },
+  upperlower: {
+    label: "Upper / Lower",
+    frequency: "4 days / week",
+    routine: ["Upper A", "Lower A", "Upper B", "Lower B"]
+  },
+  ppl: {
+    label: "Push / Pull / Legs",
+    frequency: "5–6 days / week",
+    routine: ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"]
+  }
+};
+
+function splitForDays(days) {
+  if (days <= 3) return "fullbody";
+  if (days === 4) return "upperlower";
+  return "ppl";
+}
+
+function getRoutine() {
+  const split = SPLITS[state?.settings?.split] || SPLITS.ppl;
+  return split.routine;
+}
 
 const TEMPLATES = {
   "Push A": [
@@ -60,6 +80,52 @@ const TEMPLATES = {
   "Legs B": [
     { name: "Front Squat", sets: 4, reps: 8, startWeight: "135", collapsed: false },
     { name: "Bulgarian Split Squat", sets: 3, reps: 10, startWeight: "25", collapsed: true },
+    { name: "Hip Thrust", sets: 3, reps: 10, startWeight: "135", collapsed: true },
+    { name: "Leg Extension", sets: 3, reps: 12, startWeight: "100", collapsed: true },
+    { name: "Seated Calf Raise", sets: 4, reps: 15, startWeight: "90", collapsed: true }
+  ],
+  "Full Body A": [
+    { name: "Back Squat", sets: 3, reps: 8, startWeight: "185", collapsed: false },
+    { name: "Barbell Bench Press", sets: 3, reps: 8, startWeight: "135", collapsed: true },
+    { name: "Barbell Row", sets: 3, reps: 8, startWeight: "115", collapsed: true },
+    { name: "Standing Barbell Shoulder Press", sets: 2, reps: 10, startWeight: "75", collapsed: true },
+    { name: "Barbell Curl", sets: 2, reps: 12, startWeight: "50", collapsed: true },
+    { name: "Standing Calf Raise", sets: 3, reps: 15, startWeight: "135", collapsed: true }
+  ],
+  "Full Body B": [
+    { name: "Deadlift", sets: 3, reps: 6, startWeight: "185", collapsed: false },
+    { name: "Incline Barbell Press", sets: 3, reps: 8, startWeight: "95", collapsed: true },
+    { name: "Lat Pulldown", sets: 3, reps: 10, startWeight: "100", collapsed: true },
+    { name: "Machine Shoulder Press", sets: 2, reps: 10, startWeight: "70", collapsed: true },
+    { name: "Leg Extension", sets: 2, reps: 12, startWeight: "100", collapsed: true },
+    { name: "Tricep Pushdown", sets: 2, reps: 12, startWeight: "50", collapsed: true }
+  ],
+  "Upper A": [
+    { name: "Barbell Bench Press", sets: 4, reps: 8, startWeight: "135", collapsed: false },
+    { name: "Barbell Row", sets: 4, reps: 8, startWeight: "115", collapsed: true },
+    { name: "Standing Barbell Shoulder Press", sets: 3, reps: 10, startWeight: "75", collapsed: true },
+    { name: "Lat Pulldown", sets: 3, reps: 10, startWeight: "100", collapsed: true },
+    { name: "Barbell Curl", sets: 3, reps: 12, startWeight: "50", collapsed: true },
+    { name: "Tricep Pushdown", sets: 3, reps: 12, startWeight: "50", collapsed: true }
+  ],
+  "Lower A": [
+    { name: "Back Squat", sets: 4, reps: 8, startWeight: "185", collapsed: false },
+    { name: "Romanian Deadlift", sets: 3, reps: 10, startWeight: "135", collapsed: true },
+    { name: "Walking Lunges", sets: 3, reps: 12, startWeight: "25", collapsed: true },
+    { name: "Seated Leg Curl", sets: 3, reps: 12, startWeight: "95", collapsed: true },
+    { name: "Standing Calf Raise", sets: 4, reps: 15, startWeight: "135", collapsed: true }
+  ],
+  "Upper B": [
+    { name: "Incline Barbell Press", sets: 4, reps: 8, startWeight: "95", collapsed: false },
+    { name: "Chest Supported Row", sets: 4, reps: 10, startWeight: "90", collapsed: true },
+    { name: "Arnold Press", sets: 3, reps: 10, startWeight: "25", collapsed: true },
+    { name: "Pullups", sets: 3, reps: 8, startWeight: "", collapsed: true },
+    { name: "Hammer Curl", sets: 3, reps: 12, startWeight: "25", collapsed: true },
+    { name: "Overhead Tricep Extension", sets: 3, reps: 12, startWeight: "35", collapsed: true }
+  ],
+  "Lower B": [
+    { name: "Deadlift", sets: 3, reps: 6, startWeight: "185", collapsed: false },
+    { name: "Front Squat", sets: 3, reps: 8, startWeight: "135", collapsed: true },
     { name: "Hip Thrust", sets: 3, reps: 10, startWeight: "135", collapsed: true },
     { name: "Leg Extension", sets: 3, reps: 12, startWeight: "100", collapsed: true },
     { name: "Seated Calf Raise", sets: 4, reps: 15, startWeight: "90", collapsed: true }
@@ -169,6 +235,61 @@ const EXERCISE_RULES = {
   "Seated Calf Raise": 10
 };
 
+const EXERCISE_MUSCLES = {
+  "Barbell Bench Press": ["chest"],
+  "Incline Barbell Press": ["chest"],
+  "Cable Fly": ["chest"],
+  "Pec Deck": ["chest"],
+  "Machine Press": ["chest"],
+  "Dips": ["chest", "arms"],
+  "Standing Barbell Shoulder Press": ["shoulders"],
+  "Arnold Press": ["shoulders"],
+  "Machine Shoulder Press": ["shoulders"],
+  "Cable Lateral Raise": ["shoulders"],
+  "Upright Row": ["shoulders"],
+  "Rear Delt Fly": ["shoulders"],
+  "Face Pull": ["shoulders"],
+  "Barbell Row": ["back"],
+  "Pullups": ["back"],
+  "Seated Row": ["back"],
+  "Lat Pulldown": ["back"],
+  "Chest Supported Row": ["back"],
+  "Deadlift": ["back", "hamstrings"],
+  "Barbell Curl": ["arms"],
+  "Hammer Curl": ["arms"],
+  "Preacher Curl": ["arms"],
+  "Cable Curl": ["arms"],
+  "Tricep Pushdown": ["arms"],
+  "Overhead Tricep Extension": ["arms"],
+  "Back Squat": ["quads"],
+  "Front Squat": ["quads"],
+  "Leg Extension": ["quads"],
+  "Walking Lunges": ["quads"],
+  "Bulgarian Split Squat": ["quads"],
+  "Romanian Deadlift": ["hamstrings"],
+  "Seated Leg Curl": ["hamstrings"],
+  "Hip Thrust": ["hamstrings"],
+  "Standing Calf Raise": ["calves"],
+  "Seated Calf Raise": ["calves"]
+};
+
+// Weekly hard-set targets per muscle group (evidence-based hypertrophy ranges)
+const MUSCLE_TARGETS = {
+  chest: { label: "Chest", min: 10, max: 20 },
+  back: { label: "Back", min: 10, max: 20 },
+  shoulders: { label: "Shoulders", min: 8, max: 16 },
+  arms: { label: "Arms", min: 8, max: 16 },
+  quads: { label: "Quads", min: 8, max: 16 },
+  hamstrings: { label: "Hams / Glutes", min: 8, max: 16 },
+  calves: { label: "Calves", min: 6, max: 12 }
+};
+
+// PPL default keeps continuity for anyone already mid-rotation
+const SETTINGS_DEFAULT = {
+  daysPerWeek: 6,
+  split: "ppl"
+};
+
 const USER_MAXES_DEFAULT = {
   bench: "",
   squat: "",
@@ -274,8 +395,17 @@ function defaultState() {
     customLayouts: {},
     drafts: {},
     userMaxes: { ...USER_MAXES_DEFAULT },
-    bodyMetrics: { ...BODY_METRICS_DEFAULT }
+    bodyMetrics: { ...BODY_METRICS_DEFAULT },
+    settings: { ...SETTINGS_DEFAULT }
   };
+}
+
+function normalizeSettings(parsed) {
+  const raw = parsed?.settings && typeof parsed.settings === "object" ? parsed.settings : {};
+  const days = parseInt(raw.daysPerWeek, 10);
+  const daysPerWeek = Number.isFinite(days) ? Math.min(6, Math.max(2, days)) : SETTINGS_DEFAULT.daysPerWeek;
+  const split = SPLITS[raw.split] ? raw.split : splitForDays(daysPerWeek);
+  return { daysPerWeek, split };
 }
 
 function loadState() {
@@ -284,9 +414,11 @@ function loadState() {
 
   try {
     const parsed = JSON.parse(raw);
+    const settings = normalizeSettings(parsed);
+    const routine = SPLITS[settings.split].routine;
     return {
       workouts: Array.isArray(parsed.workouts) ? parsed.workouts : [],
-      nextWorkout: parsed.nextWorkout || "Push A",
+      nextWorkout: routine.includes(parsed.nextWorkout) ? parsed.nextWorkout : routine[0],
       customLayouts: parsed.customLayouts && typeof parsed.customLayouts === "object" ? parsed.customLayouts : {},
       drafts: parsed.drafts && typeof parsed.drafts === "object" ? parsed.drafts : {},
       userMaxes: parsed.userMaxes && typeof parsed.userMaxes === "object"
@@ -294,7 +426,8 @@ function loadState() {
         : { ...USER_MAXES_DEFAULT },
       bodyMetrics: parsed.bodyMetrics && typeof parsed.bodyMetrics === "object"
         ? { ...BODY_METRICS_DEFAULT, ...parsed.bodyMetrics }
-        : { ...BODY_METRICS_DEFAULT }
+        : { ...BODY_METRICS_DEFAULT },
+      settings
     };
   } catch {
     return defaultState();
@@ -311,6 +444,7 @@ function saveState() {
   renderBodyMetricsPanel();
   renderTrackerProgress();
   renderReadinessCard();
+  renderCoachPanel();
 }
 
 function persistCurrentLayout() {
@@ -378,9 +512,10 @@ function namesMatch(a, b) {
 }
 
 function nextWorkout(day) {
-  const i = ROUTINE.indexOf(day);
-  if (i === -1) return ROUTINE[0];
-  return ROUTINE[(i + 1) % ROUTINE.length];
+  const routine = getRoutine();
+  const i = routine.indexOf(day);
+  if (i === -1) return routine[0];
+  return routine[(i + 1) % routine.length];
 }
 
 function dayGroup(day) {
@@ -408,7 +543,9 @@ function getDefaultExercise(name) {
 }
 
 function getDayOptions(day, currentName = "") {
-  const opts = [...(DAY_EXERCISE_OPTIONS[day] || [])];
+  const opts = DAY_EXERCISE_OPTIONS[day]
+    ? [...DAY_EXERCISE_OPTIONS[day]]
+    : Object.keys(EXERCISE_DEFAULTS);
   if (currentName && !opts.includes(currentName)) opts.unshift(currentName);
   return opts;
 }
@@ -625,8 +762,9 @@ function buildPowerRecommendations(context) {
     items.push("Add body fat % to turn on lean-mass efficiency and physique-adjusted scoring.");
   }
 
-  if (context.currentWeekSessions < 3) {
-    items.push(`You have ${context.currentWeekSessions} session${context.currentWeekSessions === 1 ? "" : "s"} in the current 7-day window; getting to 3+ will raise consistency and momentum.`);
+  const daysGoal = state.settings?.daysPerWeek || SETTINGS_DEFAULT.daysPerWeek;
+  if (context.currentWeekSessions < daysGoal) {
+    items.push(`You have ${context.currentWeekSessions} session${context.currentWeekSessions === 1 ? "" : "s"} in the current 7-day window against a ${daysGoal}-day goal; closing that gap raises consistency and momentum.`);
   }
 
   if (context.liftFocus) {
@@ -1397,36 +1535,64 @@ function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetRe
     .map(set => parseFloat(set.reps))
     .filter(Number.isFinite);
   const jump = EXERCISE_RULES[exerciseName] ?? 5;
-  const allHitTarget = reps.length && reps.every(rep => rep >= targetReps);
+
+  // Double progression window: work targetReps → targetReps+2, then add weight
+  const repLow = Math.max(1, targetReps);
+  const repHigh = targetReps + 2;
+  const allAtTop = reps.length && reps.every(rep => rep >= repHigh);
+  const allInRange = reps.length && reps.every(rep => rep >= repLow);
   const averageReps = reps.length ? reps.reduce((sum, rep) => sum + rep, 0) / reps.length : 0;
 
   if (jump === 0) {
     return {
       value: String(weight),
-      reason: allHitTarget ? "Bodyweight movement held steady after hitting the target." : "Bodyweight movement stays steady until reps improve."
+      reason: allAtTop
+        ? `Every set reached ${repHigh}+ reps — add a rep per set or slow the tempo to keep progressing.`
+        : `Bodyweight movement: build each set toward ${repHigh} reps before adding load.`
     };
   }
 
-  if (allHitTarget) {
-    let reason = `Completed all reps last session, so increase by ${jump} lb.`;
-    if (recovery?.level === "excellent") reason += " Recovery is good.";
-    else if (recovery?.level === "fatigued") reason += " Recovery is low, so stop a rep shy of failure.";
+  // 3-session plateau at the same top weight → deload and rebuild
+  const stats = calcExerciseStats(exerciseName);
+  if (stats && stats.sessions.length >= 3) {
+    const [a, b, c] = stats.sessions; // newest first
+    if (a.topWeight === b.topWeight && b.topWeight === c.topWeight && a.best1RM <= c.best1RM + 0.1) {
+      const deload = roundToIncrement(weight * 0.9, jump);
+      if (deload > 0 && deload < weight) {
+        return {
+          value: String(deload),
+          reason: `Stalled at ${formatSuggestedWeight(weight)} lb for 3 sessions — deload ~10% and rebuild with crisp reps to break the plateau.`
+        };
+      }
+    }
+  }
+
+  if (allAtTop) {
+    let reason = `All sets hit the top of the ${repLow}–${repHigh} rep range, so add ${jump} lb and restart at ${repLow} reps.`;
+    if (recovery?.level === "fatigued") reason += " Recovery is low, so leave a rep in the tank.";
     return {
       value: String(weight + jump),
       reason
     };
   }
 
-  if (averageReps > 0 && averageReps <= Math.max(1, targetReps - 2)) {
+  if (allInRange) {
     return {
       value: String(weight),
-      reason: `Target reps were missed (avg ${averageReps.toFixed(1)}), so repeat the weight and own the rep target first.`
+      reason: `You're inside the ${repLow}–${repHigh} range. Keep the load and push each set toward ${repHigh} reps — the weight increase comes next.`
+    };
+  }
+
+  if (averageReps > 0 && averageReps <= Math.max(1, repLow - 2)) {
+    return {
+      value: String(weight),
+      reason: `Reps fell well short (avg ${averageReps.toFixed(1)}). Repeat the weight and own ${repLow} clean reps per set first.`
     };
   }
 
   return {
     value: String(weight),
-    reason: `You were close to the ${targetReps}-rep target; repeat the load and try to clean up the remaining reps.`
+    reason: `Close to the ${repLow}-rep floor — repeat the load and clean up the remaining reps before progressing.`
   };
 }
 
@@ -1491,6 +1657,65 @@ function countWeeklySets(workouts = state.workouts || []) {
     });
   });
   return sets;
+}
+
+function muscleGroupsFor(exerciseName) {
+  if (EXERCISE_MUSCLES[exerciseName]) return EXERCISE_MUSCLES[exerciseName];
+  const match = Object.keys(EXERCISE_MUSCLES).find(name => namesMatch(name, exerciseName));
+  return match ? EXERCISE_MUSCLES[match] : [];
+}
+
+function calcWeeklyMuscleSets(workouts = state.workouts || []) {
+  const totals = {};
+  Object.keys(MUSCLE_TARGETS).forEach(key => { totals[key] = 0; });
+
+  const today = new Date(`${todayString()}T00:00:00`);
+  const start = new Date(today);
+  start.setDate(today.getDate() - 6);
+
+  workouts.forEach(workout => {
+    if (!workout.date) return;
+    const dt = new Date(`${workout.date}T00:00:00`);
+    if (isNaN(dt.getTime()) || dt < start || dt > today) return;
+    (workout.exercises || []).forEach(ex => {
+      const setCount = validSetsOf(ex).length;
+      if (!setCount) return;
+      muscleGroupsFor(ex.name).forEach(muscle => {
+        if (totals[muscle] !== undefined) totals[muscle] += setCount;
+      });
+    });
+  });
+
+  return totals;
+}
+
+function calcVolumeStatus(sets, target) {
+  if (sets >= target.max) return { key: "high", label: "High" };
+  if (sets >= target.min) return { key: "ok", label: "On Track" };
+  if (sets > 0) return { key: "low", label: "Low" };
+  return { key: "none", label: "Untrained" };
+}
+
+function buildCoachTip(weeklySessions, muscleSets) {
+  const daysGoal = state.settings?.daysPerWeek || SETTINGS_DEFAULT.daysPerWeek;
+
+  if (!state.workouts.length) {
+    return "Pick your days per week, load the next workout, and log set 1. The plan adapts to whatever schedule you can actually keep.";
+  }
+
+  if (weeklySessions >= daysGoal) {
+    const gaps = Object.entries(MUSCLE_TARGETS)
+      .filter(([key, target]) => muscleSets[key] < target.min)
+      .sort((a, b) => (muscleSets[a[0]] / a[1].min) - (muscleSets[b[0]] / b[1].min));
+    if (gaps.length) {
+      const [key, target] = gaps[0];
+      return `You've hit your ${daysGoal}-day goal this week. ${target.label} is still under target (${muscleSets[key]}/${target.min}+ sets) — bias it in your next session.`;
+    }
+    return `You've hit your ${daysGoal}-day goal and every muscle group is at or above its weekly set target. This is exactly how results happen — keep the loads progressing.`;
+  }
+
+  const remaining = daysGoal - weeklySessions;
+  return `${weeklySessions} of ${daysGoal} sessions done in the last 7 days. ${remaining} more to hit your goal — the rotation picks up wherever you left off, so a missed day never derails the plan.`;
 }
 
 function calcExerciseStats(exerciseName, workouts = state.workouts || []) {
@@ -1892,6 +2117,32 @@ function wireSetSuggestionInputs(body, exerciseName, fallbackSuggested = "") {
   updateSetSuggestionUI(body, exerciseName, fallbackSuggested);
 }
 
+function buildWarmupHTML(exerciseName, workingWeight) {
+  const w = parseFloat(workingWeight);
+  const increment = EXERCISE_RULES[exerciseName] ?? 5;
+
+  if (increment === 0) {
+    return `<strong>Warm-up</strong><span>2 easy sets of half your working reps, then go.</span>`;
+  }
+  if (!Number.isFinite(w) || w <= 0) {
+    return `<strong>Warm-up</strong><span>Enter a set 1 weight to get a ramp-up plan.</span>`;
+  }
+  if (w < 90) {
+    return `<strong>Warm-up</strong><span>Light load — one easy set of 12–15 at about half weight (${formatSuggestedWeight(roundToIncrement(w * 0.5, increment) || increment)} lb) is plenty.</span>`;
+  }
+
+  const steps = [
+    { pct: 0.4, reps: 5 },
+    { pct: 0.6, reps: 3 },
+    { pct: 0.8, reps: 1 }
+  ].map(step => `${formatSuggestedWeight(roundToIncrement(w * step.pct, increment))} × ${step.reps}`);
+
+  return `
+    <strong>Warm-up ramp to ${formatSuggestedWeight(w)} lb</strong>
+    <span>Start light (empty bar / lightest stack) × 10, then ${steps.join(" → ")}. Rest ~60s between ramp sets, then hit set 1.</span>
+  `;
+}
+
 function applyPresetToRows(body, value, exerciseName = "") {
   const weights = body.querySelectorAll(".weight");
   weights.forEach((input, index) => {
@@ -1911,7 +2162,7 @@ function renderTabs() {
   if (!tabbar) return;
   tabbar.innerHTML = "";
 
-  ROUTINE.forEach(day => {
+  getRoutine().forEach(day => {
     const btn = document.createElement("button");
     btn.className = `tab${day === selectedDay ? " active" : ""}`;
     btn.textContent = day;
@@ -1975,6 +2226,122 @@ function buildReadinessRecommendation(recovery, groupDays) {
   if (groupDays === null) return "Fresh slate. Great day to set your baselines.";
   if (groupDays >= 2) return "Great day to push for a PR.";
   return "Recovery is good. Push your working sets with intent.";
+}
+
+function applyCoachSettings(daysPerWeek, split) {
+  const routineBefore = getRoutine();
+  state.settings = {
+    daysPerWeek: Math.min(6, Math.max(2, parseInt(daysPerWeek, 10) || SETTINGS_DEFAULT.daysPerWeek)),
+    split: SPLITS[split] ? split : splitForDays(daysPerWeek)
+  };
+
+  const routine = getRoutine();
+  const splitChanged = routine !== routineBefore && !routine.includes(state.nextWorkout);
+  if (splitChanged) {
+    state.nextWorkout = routine[0];
+  }
+
+  saveState();
+
+  if (splitChanged && currentPage === "workout") {
+    stopSessionTimer();
+    loadTemplate(state.nextWorkout);
+    showToast(`Split changed — up next: ${state.nextWorkout}`, "success");
+  }
+}
+
+function renderCoachPanel() {
+  const panel = document.getElementById("coachPanel");
+  if (!panel) return;
+
+  const settings = state.settings || { ...SETTINGS_DEFAULT };
+  const split = SPLITS[settings.split] || SPLITS.ppl;
+  const weeklySessions = calcWeeklyConsistency(state.workouts).current;
+  const muscleSets = calcWeeklyMuscleSets();
+  const pace = Math.max(0, Math.min(100, Math.round((weeklySessions / settings.daysPerWeek) * 100)));
+  const tip = buildCoachTip(weeklySessions, muscleSets);
+  const recommendedSplit = splitForDays(settings.daysPerWeek);
+  const splitMismatch = recommendedSplit !== settings.split;
+
+  const dayOptions = [2, 3, 4, 5, 6]
+    .map(n => `<option value="${n}" ${n === settings.daysPerWeek ? "selected" : ""}>${n} days / week</option>`)
+    .join("");
+
+  const splitOptions = Object.entries(SPLITS)
+    .map(([key, s]) => `<option value="${key}" ${key === settings.split ? "selected" : ""}>${s.label} (${s.frequency})</option>`)
+    .join("");
+
+  const volumeBars = Object.entries(MUSCLE_TARGETS).map(([key, target]) => {
+    const sets = muscleSets[key] || 0;
+    const status = calcVolumeStatus(sets, target);
+    const fill = Math.max(0, Math.min(100, Math.round((sets / target.max) * 100)));
+    return `
+      <div class="volume-row">
+        <div class="volume-row-head">
+          <span>${target.label}</span>
+          <strong class="volume-status ${status.key}">${sets} set${sets === 1 ? "" : "s"} · ${status.label}</strong>
+        </div>
+        <div class="volume-track">
+          <div class="volume-fill ${status.key}" style="width:${fill}%"></div>
+          <div class="volume-target-marker" style="left:${Math.round((target.min / target.max) * 100)}%"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  panel.innerHTML = `
+    <section class="coach-card">
+      <div class="readiness-head">
+        <div>
+          <div class="readiness-kicker">Coach Plan · ${escapeHtml(split.label)}</div>
+          <div class="readiness-title">This week: ${weeklySessions} / ${settings.daysPerWeek} sessions</div>
+        </div>
+        <div class="readiness-reco">${escapeHtml(tip)}</div>
+      </div>
+
+      <div class="progress-track-wrap">
+        <div class="progress-track"><div class="progress-fill" style="width:${pace}%"></div></div>
+      </div>
+
+      <div class="coach-settings">
+        <div>
+          <label for="coachDays">Training Days</label>
+          <select id="coachDays">${dayOptions}</select>
+        </div>
+        <div>
+          <label for="coachSplit">Split</label>
+          <select id="coachSplit">${splitOptions}</select>
+        </div>
+        <div class="coach-settings-note">
+          ${splitMismatch
+            ? `For ${settings.daysPerWeek} days/week, ${SPLITS[recommendedSplit].label} usually fits best. <button class="ghost mini" id="coachApplySplitBtn" type="button">Switch</button>`
+            : "Split matches your schedule. The rotation continues from wherever you left off — no week is ever wasted."}
+        </div>
+      </div>
+
+      <div class="coach-volume">
+        <div class="coach-volume-title">Weekly Sets Per Muscle · last 7 days</div>
+        ${volumeBars}
+        <div class="coach-volume-legend">Marker = weekly minimum for growth. Land between the marker and the end of the bar.</div>
+      </div>
+    </section>
+  `;
+
+  document.getElementById("coachDays").onchange = (e) => {
+    applyCoachSettings(parseInt(e.target.value, 10), state.settings.split);
+    renderCoachPanel();
+  };
+  document.getElementById("coachSplit").onchange = (e) => {
+    applyCoachSettings(state.settings.daysPerWeek, e.target.value);
+    renderCoachPanel();
+  };
+  const applyBtn = document.getElementById("coachApplySplitBtn");
+  if (applyBtn) {
+    applyBtn.onclick = () => {
+      applyCoachSettings(state.settings.daysPerWeek, recommendedSplit);
+      renderCoachPanel();
+    };
+  }
 }
 
 function renderReadinessCard() {
@@ -2318,12 +2685,17 @@ demoRow.style.gap = "8px";
 demoRow.style.flexWrap = "wrap";
 demoRow.style.marginBottom = "10px";
 demoRow.innerHTML = `
-  <button class="ghost" type="button">▶ Demo</button>
+  <button class="ghost demo-btn" type="button">▶ Demo</button>
+  <button class="ghost warmup-btn" type="button">🔥 Warm-up</button>
 `;
+
+const warmupBox = document.createElement("div");
+warmupBox.className = "warmup-box hidden";
 
 body.appendChild(editGrid);
 body.appendChild(presetRow);
 body.appendChild(demoRow);
+body.appendChild(warmupBox);
 
     rebuildSetRows(body, ex.sets, suggested.value, draftEx?.entries || [], ex.name);
 
@@ -2358,7 +2730,8 @@ body.appendChild(demoRow);
 const presetInput = presetRow.querySelector(".preset-weight");
 const usePresetBtn = presetRow.querySelector("button");
 const suggestText = presetRow.querySelector(".exercise-suggest");
-const demoBtn = demoRow.querySelector("button");
+const demoBtn = demoRow.querySelector(".demo-btn");
+const warmupBtn = demoRow.querySelector(".warmup-btn");
 
     selectInput.onchange = () => {
       const next = getDefaultExercise(selectInput.value);
@@ -2403,6 +2776,16 @@ const demoBtn = demoRow.querySelector("button");
     };
 demoBtn.onclick = () => {
   openExerciseDemo(selectInput.value || ex.name);
+};
+warmupBtn.onclick = () => {
+  const nowHidden = warmupBox.classList.toggle("hidden");
+  if (!nowHidden) {
+    const baseline = body.querySelector(".setRow .weight")?.value.trim()
+      || suggested.value
+      || presetInput.value.trim();
+    warmupBox.innerHTML = buildWarmupHTML(selectInput.value || ex.name, baseline);
+  }
+  warmupBtn.textContent = nowHidden ? "🔥 Warm-up" : "Hide Warm-up";
 };
     card.appendChild(head);
     card.appendChild(body);
@@ -2523,6 +2906,7 @@ function exportLog() {
     drafts: state.drafts,
     userMaxes: state.userMaxes,
     bodyMetrics: state.bodyMetrics,
+    settings: state.settings,
     workouts: state.workouts
   };
 
@@ -2561,9 +2945,11 @@ function importLog(file) {
     const count = parsed.workouts.length;
     if (!confirm(`Import ${count} workout${count === 1 ? "" : "s"}? This replaces the data currently saved on this device.`)) return;
 
+    const importedSettings = normalizeSettings(parsed);
+    const importedRoutine = SPLITS[importedSettings.split].routine;
     state = {
       workouts: parsed.workouts,
-      nextWorkout: ROUTINE.includes(parsed.nextWorkout) ? parsed.nextWorkout : "Push A",
+      nextWorkout: importedRoutine.includes(parsed.nextWorkout) ? parsed.nextWorkout : importedRoutine[0],
       customLayouts: parsed.customLayouts && typeof parsed.customLayouts === "object" ? parsed.customLayouts : {},
       drafts: parsed.drafts && typeof parsed.drafts === "object" ? parsed.drafts : {},
       userMaxes: parsed.userMaxes && typeof parsed.userMaxes === "object"
@@ -2571,7 +2957,8 @@ function importLog(file) {
         : { ...USER_MAXES_DEFAULT },
       bodyMetrics: parsed.bodyMetrics && typeof parsed.bodyMetrics === "object"
         ? { ...BODY_METRICS_DEFAULT, ...parsed.bodyMetrics }
-        : { ...BODY_METRICS_DEFAULT }
+        : { ...BODY_METRICS_DEFAULT },
+      settings: importedSettings
     };
 
     saveState();
@@ -2649,6 +3036,7 @@ function initWorkoutPage() {
   renderTabs();
   renderStats();
   renderHistory();
+  renderCoachPanel();
   wireButtons();
   updateRestTimerUI();
   loadTemplate(state.nextWorkout);

@@ -310,6 +310,7 @@ function saveState() {
   renderMaxesPanel();
   renderBodyMetricsPanel();
   renderTrackerProgress();
+  renderReadinessCard();
 }
 
 function persistCurrentLayout() {
@@ -380,6 +381,19 @@ function nextWorkout(day) {
   const i = ROUTINE.indexOf(day);
   if (i === -1) return ROUTINE[0];
   return ROUTINE[(i + 1) % ROUTINE.length];
+}
+
+function dayGroup(day) {
+  const trimmed = String(day || "").replace(/\s+[AB]$/i, "").trim();
+  return trimmed || String(day || "");
+}
+
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  const then = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(then.getTime())) return null;
+  const now = new Date(`${todayString()}T00:00:00`);
+  return Math.round((now - then) / 86400000);
 }
 
 function getDefaultExercise(name) {
@@ -904,6 +918,42 @@ function renderPowerPanel() {
   const deltaClass = p.scoreDelta > 0 ? "positive" : p.scoreDelta < 0 ? "negative" : "neutral";
   const deltaPrefix = p.scoreDelta > 0 ? "+" : "";
 
+  const insights = calcLiftInsights(p);
+  const insightSection = insights
+    ? `
+      <section class="power-card power-card-wide">
+        <div class="power-section-title">Lift Intelligence</div>
+        <div class="power-insight-grid">
+          <div class="power-focus-box">
+            <div class="power-focus-label">Strongest Lift</div>
+            <strong>${insights.strongest.label}</strong>
+            <span>${insights.strongest.value.toLocaleString()} lb est 1RM</span>
+          </div>
+          <div class="power-focus-box">
+            <div class="power-focus-label">Fastest Improving</div>
+            <strong>${insights.fastest ? insights.fastest.label : "—"}</strong>
+            <span>${insights.fastest ? `+${Math.round(insights.fastest.gain)} lb est over recent sessions` : "No lift is trending up yet."}</span>
+          </div>
+          <div class="power-focus-box">
+            <div class="power-focus-label">Weakest Lift</div>
+            <strong>${insights.weakest.label}</strong>
+            <span>${insights.weakest.value.toLocaleString()} lb est 1RM</span>
+          </div>
+          <div class="power-focus-box highlight">
+            <div class="power-focus-label">Improve Next</div>
+            <strong>${insights.focus.label}</strong>
+            <span>≈ +${insights.focus.pointsPer10.toLocaleString()} points per +10 lb on this lift</span>
+          </div>
+        </div>
+      </section>
+    `
+    : `
+      <section class="power-card power-card-wide">
+        <div class="power-section-title">Lift Intelligence</div>
+        <div class="power-empty">Log workouts or add manual maxes to unlock strongest, weakest, and fastest-improving lift insights.</div>
+      </section>
+    `;
+
   panel.innerHTML = `
     <div class="power-shell">
       <section class="power-card power-card-hero">
@@ -967,6 +1017,8 @@ function renderPowerPanel() {
         <div class="power-section-title">Score Trend</div>
         <div class="power-sparkline">${sparkBars}</div>
       </section>
+
+      ${insightSection}
 
       <section class="power-card power-card-wide">
         <div class="power-section-title">Coach Notes</div>
@@ -1325,7 +1377,7 @@ function findLastPerformance(exerciseName) {
   return null;
 }
 
-function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetReps = 8) {
+function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetReps = 8, recovery = null) {
   if (!lastPerformance) {
     return {
       value: String(startWeight || ""),
@@ -1356,22 +1408,355 @@ function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetRe
   }
 
   if (allHitTarget) {
+    let reason = `Completed all reps last session, so increase by ${jump} lb.`;
+    if (recovery?.level === "excellent") reason += " Recovery is good.";
+    else if (recovery?.level === "fatigued") reason += " Recovery is low, so stop a rep shy of failure.";
     return {
       value: String(weight + jump),
-      reason: `All logged sets hit ${targetReps}+ reps last time, so the load moves up by ${jump}.`
+      reason
     };
   }
 
   if (averageReps > 0 && averageReps <= Math.max(1, targetReps - 2)) {
     return {
       value: String(weight),
-      reason: `Average reps were ${averageReps.toFixed(1)}, so keep the load steady and own the rep target first.`
+      reason: `Target reps were missed (avg ${averageReps.toFixed(1)}), so repeat the weight and own the rep target first.`
     };
   }
 
   return {
     value: String(weight),
     reason: `You were close to the ${targetReps}-rep target; repeat the load and try to clean up the remaining reps.`
+  };
+}
+
+// ==============================
+// TRAINING INTELLIGENCE
+// ==============================
+
+function validSetsOf(ex) {
+  return (ex?.sets || [])
+    .map(set => ({ weight: parseFloat(set.weight), reps: parseFloat(set.reps) }))
+    .filter(set => Number.isFinite(set.weight) && Number.isFinite(set.reps) && set.weight > 0 && set.reps > 0);
+}
+
+function calcRecoveryData(workouts = state.workouts || []) {
+  const streak = calcStreakDays(workouts);
+
+  if (!workouts.length) {
+    return {
+      score: 100, level: "excellent", emoji: "🟢", label: "Excellent", fatigue: "Fresh",
+      daysSinceLast: null, lastVolume: 0, streak
+    };
+  }
+
+  const lastDated = workouts.find(w => w.date);
+  const days = lastDated ? daysSince(lastDated.date) : null;
+  const lastVolume = calcWorkoutVolume(workouts[0]);
+
+  let score = 100;
+  if (days !== null) {
+    if (days <= 0) score -= 40;
+    else if (days === 1) score -= 18;
+    else if (days === 2) score -= 6;
+  }
+  if (lastVolume >= 14000) score -= 22;
+  else if (lastVolume >= 9000) score -= 12;
+  else if (lastVolume >= 5000) score -= 5;
+  score -= Math.min(streak * 7, 21);
+  score = Math.max(0, Math.min(100, score));
+
+  const level = score >= 70 ? "excellent" : score >= 40 ? "moderate" : "fatigued";
+  const meta = {
+    excellent: { emoji: "🟢", label: "Excellent", fatigue: "Fresh" },
+    moderate: { emoji: "🟡", label: "Moderate", fatigue: "Moderate" },
+    fatigued: { emoji: "🔴", label: "Fatigued", fatigue: "Fatigued" }
+  }[level];
+
+  return { score, level, ...meta, daysSinceLast: days, lastVolume, streak };
+}
+
+function countWeeklySets(workouts = state.workouts || []) {
+  const today = new Date(`${todayString()}T00:00:00`);
+  const start = new Date(today);
+  start.setDate(today.getDate() - 6);
+
+  let sets = 0;
+  workouts.forEach(workout => {
+    if (!workout.date) return;
+    const dt = new Date(`${workout.date}T00:00:00`);
+    if (isNaN(dt.getTime()) || dt < start || dt > today) return;
+    (workout.exercises || []).forEach(ex => {
+      sets += validSetsOf(ex).length;
+    });
+  });
+  return sets;
+}
+
+function calcExerciseStats(exerciseName, workouts = state.workouts || []) {
+  const sessions = [];
+
+  workouts.forEach(workout => {
+    (workout.exercises || []).forEach(ex => {
+      if (!namesMatch(ex.name, exerciseName)) return;
+      const sets = validSetsOf(ex);
+      if (!sets.length) return;
+
+      let best = { value: 0, weight: 0, reps: 0 };
+      let topWeight = 0;
+      let volume = 0;
+      let repCount = 0;
+
+      sets.forEach(set => {
+        const e = est1RM(set.weight, set.reps);
+        if (e > best.value) best = { value: e, weight: set.weight, reps: set.reps };
+        topWeight = Math.max(topWeight, set.weight);
+        volume += set.weight * set.reps;
+        repCount += set.reps;
+      });
+
+      sessions.push({
+        date: workout.date || "",
+        workoutName: workout.name || "",
+        volume,
+        best1RM: best.value,
+        bestSet: best,
+        topWeight,
+        setCount: sets.length,
+        repCount,
+        sets
+      });
+    });
+  });
+
+  if (!sessions.length) return null;
+
+  let lifetimeVolume = 0;
+  let totalSets = 0;
+  let totalReps = 0;
+  let best1RM = { value: 0, weight: 0, reps: 0, date: "" };
+  let heaviest = { weight: 0, reps: 0, date: "" };
+  const repsAtWeight = {};
+
+  sessions.forEach(session => {
+    lifetimeVolume += session.volume;
+    totalSets += session.setCount;
+    totalReps += session.repCount;
+    session.sets.forEach(set => {
+      const e = est1RM(set.weight, set.reps);
+      if (e > best1RM.value) best1RM = { value: e, weight: set.weight, reps: set.reps, date: session.date };
+      if (set.weight > heaviest.weight || (set.weight === heaviest.weight && set.reps > heaviest.reps)) {
+        heaviest = { weight: set.weight, reps: set.reps, date: session.date };
+      }
+      const key = String(set.weight);
+      if (!repsAtWeight[key] || set.reps > repsAtWeight[key].reps) {
+        repsAtWeight[key] = { weight: set.weight, reps: set.reps, date: session.date };
+      }
+    });
+  });
+
+  // sessions arrive newest-first from state.workouts; recent trend reads oldest → newest
+  const recent = sessions.slice(0, 5).reverse();
+
+  return {
+    name: exerciseName,
+    sessionCount: sessions.length,
+    lastPerformed: sessions[0].date,
+    lifetimeVolume,
+    avgReps: totalSets ? totalReps / totalSets : 0,
+    best1RM,
+    heaviest,
+    bestRepSet: repsAtWeight[String(heaviest.weight)] || null,
+    recent,
+    sessions
+  };
+}
+
+function detectPRs(workout, priorWorkouts) {
+  const prs = [];
+
+  const volume = calcWorkoutVolume(workout);
+  if (priorWorkouts.length && volume > 0) {
+    let priorMaxVolume = 0;
+    priorWorkouts.forEach(w => {
+      priorMaxVolume = Math.max(priorMaxVolume, calcWorkoutVolume(w));
+    });
+    if (volume > priorMaxVolume) {
+      prs.push({
+        type: "volume",
+        label: "Highest Workout Volume",
+        detail: `${Math.round(volume).toLocaleString()} lb total (was ${Math.round(priorMaxVolume).toLocaleString()})`
+      });
+    }
+  }
+
+  (workout.exercises || []).forEach(ex => {
+    const sets = validSetsOf(ex);
+    if (!sets.length) return;
+
+    let prior1RM = 0;
+    let priorHeaviest = 0;
+    const priorRepsAtWeight = {};
+
+    priorWorkouts.forEach(w => {
+      (w.exercises || []).forEach(pe => {
+        if (!namesMatch(pe.name, ex.name)) return;
+        validSetsOf(pe).forEach(set => {
+          prior1RM = Math.max(prior1RM, est1RM(set.weight, set.reps));
+          priorHeaviest = Math.max(priorHeaviest, set.weight);
+          const key = String(set.weight);
+          priorRepsAtWeight[key] = Math.max(priorRepsAtWeight[key] || 0, set.reps);
+        });
+      });
+    });
+
+    if (!prior1RM) return; // first log of a movement sets the baseline, not a PR
+
+    let new1RM = 0;
+    let newHeaviest = 0;
+    sets.forEach(set => {
+      new1RM = Math.max(new1RM, est1RM(set.weight, set.reps));
+      newHeaviest = Math.max(newHeaviest, set.weight);
+    });
+
+    if (new1RM > prior1RM + 0.1) {
+      prs.push({
+        type: "1rm",
+        label: `${ex.name} · Est 1RM`,
+        detail: `${Math.round(new1RM)} lb est (was ${Math.round(prior1RM)})`
+      });
+    }
+
+    if (newHeaviest > priorHeaviest) {
+      prs.push({
+        type: "weight",
+        label: `${ex.name} · Heaviest Weight`,
+        detail: `${newHeaviest} lb (was ${priorHeaviest})`
+      });
+    }
+
+    let bestRepPR = null;
+    sets.forEach(set => {
+      const prior = priorRepsAtWeight[String(set.weight)];
+      if (prior && set.reps > prior) {
+        const gain = set.reps - prior;
+        if (!bestRepPR || gain > bestRepPR.gain) {
+          bestRepPR = { weight: set.weight, reps: set.reps, prior, gain };
+        }
+      }
+    });
+    if (bestRepPR) {
+      prs.push({
+        type: "reps",
+        label: `${ex.name} · Rep Record`,
+        detail: `${bestRepPR.reps} reps at ${bestRepPR.weight} lb (was ${bestRepPR.prior})`
+      });
+    }
+  });
+
+  return prs;
+}
+
+function generateCoachingInsight(workout, allWorkouts) {
+  const group = dayGroup(workout.name);
+
+  // 1) Progression streak: top-set est 1RM up three sessions in a row
+  for (const ex of (workout.exercises || [])) {
+    if (!validSetsOf(ex).length) continue;
+    const stats = calcExerciseStats(ex.name, allWorkouts);
+    if (!stats || stats.sessions.length < 3) continue;
+    const [a, b, c] = stats.sessions; // newest first
+    if (a.best1RM > b.best1RM + 0.1 && b.best1RM > c.best1RM + 0.1) {
+      return `Excellent progression. ${ex.name} has improved three sessions in a row.`;
+    }
+  }
+
+  // 2) Plateau: same top weight with no est 1RM gain across three sessions
+  for (const ex of (workout.exercises || [])) {
+    if (!validSetsOf(ex).length) continue;
+    const stats = calcExerciseStats(ex.name, allWorkouts);
+    if (!stats || stats.sessions.length < 3) continue;
+    const [a, b, c] = stats.sessions;
+    if (a.topWeight === b.topWeight && b.topWeight === c.topWeight && a.best1RM <= c.best1RM + 0.1) {
+      return `${ex.name} has plateaued over three sessions. Consider increasing rest next workout.`;
+    }
+  }
+
+  // 3) Consistency within the muscle group
+  const groupCount = allWorkouts.filter(w => dayGroup(w.name) === group).length;
+  if (groupCount >= 3) {
+    return `Great consistency. ${groupCount} ${group} workouts completed.`;
+  }
+
+  // 4) Volume versus the previous session of the same day
+  const previousSameDay = allWorkouts.find(w => w !== workout && w.name === workout.name);
+  if (previousSameDay) {
+    const nowVol = calcWorkoutVolume(workout);
+    const prevVol = calcWorkoutVolume(previousSameDay);
+    if (prevVol > 0 && nowVol > prevVol) {
+      const pct = Math.round(((nowVol - prevVol) / prevVol) * 100);
+      if (pct >= 1) return `Total volume was up ${pct}% versus your last ${workout.name} session. Strong work.`;
+    }
+  }
+
+  const streak = calcStreakDays(allWorkouts);
+  if (streak >= 2) {
+    return `Great consistency. You're on a ${streak}-day training streak.`;
+  }
+
+  return "Solid session logged. Keep stacking consistent workouts to unlock deeper insights.";
+}
+
+const POWER_LIFT_LABELS = { bench: "Bench", squat: "Squat", deadlift: "Deadlift", press: "Press", pull: "Pull" };
+const POWER_ABS_MULT = { bench: 1.7, squat: 1.9, deadlift: 1.9, press: 1.5, pull: 1.4 };
+const POWER_REL_MULT = { bench: 210, squat: 250, deadlift: 250, press: 170, pull: 160 };
+const POWER_LEAN_MULT = { bench: 160, squat: 185, deadlift: 185, press: 130, pull: 125 };
+
+function calcLiftInsights(p, workouts = state.workouts || []) {
+  const entries = Object.entries(p.bestLifts).filter(([, value]) => value > 0);
+  if (!entries.length) return null;
+
+  const strongest = entries.reduce((best, entry) => (entry[1] > best[1] ? entry : best));
+  const weakest = entries.reduce((low, entry) => (entry[1] < low[1] ? entry : low));
+
+  // fastest improving: best est 1RM gained across each group's last four logged sessions
+  const chronological = workouts.slice().reverse();
+  let fastest = null;
+  Object.keys(POWER_LIFT_GROUPS).forEach(key => {
+    const series = [];
+    chronological.forEach(w => {
+      const best = bestLiftForNames([w], POWER_LIFT_GROUPS[key]);
+      if (best > 0) series.push(best);
+    });
+    if (series.length < 2) return;
+    const window = series.slice(-4);
+    const gain = window[window.length - 1] - window[0];
+    if (gain > 0.5 && (!fastest || gain > fastest.gain)) {
+      fastest = { key, label: POWER_LIFT_LABELS[key], gain };
+    }
+  });
+
+  const focusKey = weakest[0];
+  const body = p.body || {};
+  const gain = 10;
+  let points = gain * (POWER_ABS_MULT[focusKey] || 1.5);
+  if (body.bodyWeight > 0) {
+    points += (gain / body.bodyWeight) * (POWER_REL_MULT[focusKey] || 180)
+      * (body.heightModifier || 1) * (body.bodyFatModifier || 1) * (body.ageModifier || 1);
+  }
+  if (body.leanMass > 0) {
+    points += (gain / body.leanMass) * (POWER_LEAN_MULT[focusKey] || 150) * (body.bodyFatModifier || 1);
+  }
+
+  return {
+    strongest: { key: strongest[0], label: POWER_LIFT_LABELS[strongest[0]], value: strongest[1] },
+    weakest: { key: weakest[0], label: POWER_LIFT_LABELS[weakest[0]], value: weakest[1] },
+    fastest,
+    focus: {
+      key: focusKey,
+      label: POWER_LIFT_LABELS[focusKey],
+      pointsPer10: Math.round(points)
+    }
   };
 }
 
@@ -1548,6 +1933,211 @@ function renderStats() {
   lastEl.textContent = state.workouts[0]?.name || "—";
 }
 
+function sparklineHTML(points, title, formatter = (v) => String(Math.round(v))) {
+  if (!points.length) return "";
+  const max = Math.max(...points.map(p => p.value), 1);
+  const bars = points.map(p => {
+    const height = Math.max(6, Math.round((p.value / max) * 34));
+    const dateLabel = p.date ? p.date.slice(5) : "—";
+    return `
+      <div class="mini-spark-col" title="${escapeHtml(p.date || "")} · ${escapeHtml(formatter(p.value))}">
+        <div class="mini-spark-bar" style="height:${height}px"></div>
+        <span>${escapeHtml(dateLabel)}</span>
+      </div>
+    `;
+  }).join("");
+
+  const first = points[0].value;
+  const lastVal = points[points.length - 1].value;
+  const trend = points.length > 1
+    ? (lastVal > first ? "▲" : lastVal < first ? "▼" : "▬")
+    : "";
+  const trendClass = lastVal > first ? "up" : lastVal < first ? "down" : "flat";
+
+  return `
+    <div class="mini-spark-wrap">
+      <div class="mini-spark-head">
+        <span>${escapeHtml(title)}</span>
+        <strong class="mini-spark-trend ${trendClass}">${escapeHtml(formatter(lastVal))} ${trend}</strong>
+      </div>
+      <div class="mini-spark">${bars}</div>
+    </div>
+  `;
+}
+
+function buildReadinessRecommendation(recovery, groupDays) {
+  if (recovery.level === "fatigued") {
+    return "Recovery is low. Keep loads moderate or take an extra rest day.";
+  }
+  if (recovery.level === "moderate") {
+    return "Recovery is decent. Hit your working sets, but save all-out PRs for a fresher day.";
+  }
+  if (groupDays === null) return "Fresh slate. Great day to set your baselines.";
+  if (groupDays >= 2) return "Great day to push for a PR.";
+  return "Recovery is good. Push your working sets with intent.";
+}
+
+function renderReadinessCard() {
+  const panel = document.getElementById("readinessPanel");
+  if (!panel) return;
+
+  const group = dayGroup(selectedDay);
+  const recovery = calcRecoveryData();
+  const lastGroupWorkout = state.workouts.find(w => w.date && dayGroup(w.name) === group);
+  const groupDays = lastGroupWorkout ? daysSince(lastGroupWorkout.date) : null;
+  const lastWorkout = state.workouts.find(w => w.date) || state.workouts[0] || null;
+  const weeklySets = countWeeklySets();
+  const recommendation = buildReadinessRecommendation(recovery, groupDays);
+
+  panel.innerHTML = `
+    <section class="readiness-card">
+      <div class="readiness-head">
+        <div>
+          <div class="readiness-kicker">Workout Readiness · ${escapeHtml(selectedDay)}</div>
+          <div class="readiness-title">
+            <span class="recovery-dot ${recovery.level}"></span>
+            ${recovery.emoji} ${recovery.label} · ${escapeHtml(recovery.fatigue)}
+          </div>
+        </div>
+        <div class="readiness-reco">${escapeHtml(recommendation)}</div>
+      </div>
+      <div class="readiness-grid">
+        <div class="readiness-chip">
+          <span>${escapeHtml(group)} Last Trained</span>
+          <strong>${groupDays === null ? "Never" : groupDays === 0 ? "Today" : `${groupDays} day${groupDays === 1 ? "" : "s"} ago`}</strong>
+        </div>
+        <div class="readiness-chip">
+          <span>Streak</span>
+          <strong>${recovery.streak} day${recovery.streak === 1 ? "" : "s"}</strong>
+        </div>
+        <div class="readiness-chip">
+          <span>Estimated Fatigue</span>
+          <strong>${escapeHtml(recovery.fatigue)}</strong>
+        </div>
+        <div class="readiness-chip">
+          <span>Last Workout</span>
+          <strong>${lastWorkout ? escapeHtml(lastWorkout.date || "—") : "—"}</strong>
+        </div>
+        <div class="readiness-chip">
+          <span>Weekly Sets</span>
+          <strong>${weeklySets}</strong>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+let celebration = null;
+
+function renderCelebrationPanel() {
+  const panel = document.getElementById("celebrationPanel");
+  if (!panel) return;
+
+  if (!celebration) {
+    panel.innerHTML = "";
+    return;
+  }
+
+  const prBadges = celebration.prs.length
+    ? `<div class="pr-badge-row">${celebration.prs.map(pr => `
+        <div class="pr-badge">
+          <span class="pr-badge-icon">🏆</span>
+          <div>
+            <strong>${escapeHtml(pr.label)}</strong>
+            <span>${escapeHtml(pr.detail)}</span>
+          </div>
+        </div>
+      `).join("")}</div>`
+    : "";
+
+  panel.innerHTML = `
+    <section class="celebrate-card${celebration.prs.length ? " has-pr" : ""}">
+      <div class="celebrate-head">
+        <div>
+          <div class="celebrate-kicker">${celebration.prs.length ? "🎉 Personal Records" : "Session Saved"}</div>
+          <div class="celebrate-title">${escapeHtml(celebration.name)} · ${escapeHtml(celebration.date)}</div>
+        </div>
+        <button class="ghost mini" id="celebrateCloseBtn" type="button">Dismiss</button>
+      </div>
+      ${prBadges}
+      <div class="insight-box"><span class="insight-icon">🧠</span>${escapeHtml(celebration.insight)}</div>
+    </section>
+  `;
+
+  document.getElementById("celebrateCloseBtn").onclick = () => {
+    celebration = null;
+    renderCelebrationPanel();
+  };
+}
+
+const analyticsExpanded = new Set();
+
+function buildSuggestionHTML(last, suggested) {
+  const lines = [];
+  if (last) {
+    lines.push(`Last workout: ${last.weight} × ${last.reps} over ${last.setCount} set${last.setCount === 1 ? "" : "s"}`);
+    const best = (last.sets || []).reduce((max, set) => Math.max(max, est1RM(set.weight, set.reps)), 0);
+    if (best > 0) lines.push(`Est 1RM: ${Math.round(best)} lb`);
+  }
+  return `
+    <strong>Suggested: ${escapeHtml(suggested.value || "—")}</strong>
+    ${lines.map(line => `<small class="suggest-line">${escapeHtml(line)}</small>`).join("")}
+    <small>${escapeHtml(suggested.reason)}</small>
+  `;
+}
+
+function buildAnalyticsHTML(stats) {
+  const bestSetText = stats.best1RM.weight
+    ? `${formatSuggestedWeight(stats.best1RM.weight)} × ${stats.best1RM.reps}`
+    : "—";
+
+  const badges = [];
+  if (stats.best1RM.value > 0) {
+    badges.push({ label: "Best Est 1RM", detail: `${Math.round(stats.best1RM.value)} lb${stats.best1RM.date ? ` · ${stats.best1RM.date}` : ""}` });
+  }
+  if (stats.heaviest.weight > 0) {
+    badges.push({ label: "Heaviest Weight", detail: `${formatSuggestedWeight(stats.heaviest.weight)} lb${stats.heaviest.date ? ` · ${stats.heaviest.date}` : ""}` });
+  }
+  if (stats.bestRepSet) {
+    badges.push({ label: "Most Reps at Top Weight", detail: `${stats.bestRepSet.reps} reps at ${formatSuggestedWeight(stats.bestRepSet.weight)} lb` });
+  }
+
+  const badgeRow = badges.length
+    ? `<div class="pr-badge-row compact">${badges.map(b => `
+        <div class="pr-badge">
+          <span class="pr-badge-icon">🏅</span>
+          <div>
+            <strong>${escapeHtml(b.label)}</strong>
+            <span>${escapeHtml(b.detail)}</span>
+          </div>
+        </div>
+      `).join("")}</div>`
+    : "";
+
+  const sparks = stats.recent.length > 1
+    ? `
+      <div class="analytics-sparks">
+        ${sparklineHTML(stats.recent.map(s => ({ date: s.date, value: s.topWeight })), "Weight", v => `${formatSuggestedWeight(v)} lb`)}
+        ${sparklineHTML(stats.recent.map(s => ({ date: s.date, value: s.volume })), "Volume", v => `${Math.round(v).toLocaleString()} lb`)}
+        ${sparklineHTML(stats.recent.map(s => ({ date: s.date, value: s.best1RM })), "Est 1RM", v => `${Math.round(v)} lb`)}
+      </div>
+    `
+    : `<div class="analytics-note">Log another session to unlock trend graphs.</div>`;
+
+  return `
+    <div class="analytics-grid">
+      <div class="readiness-chip"><span>Est 1RM</span><strong>${stats.best1RM.value ? `${Math.round(stats.best1RM.value)} lb` : "—"}</strong></div>
+      <div class="readiness-chip"><span>Best Set</span><strong>${escapeHtml(bestSetText)}</strong></div>
+      <div class="readiness-chip"><span>Lifetime Volume</span><strong>${Math.round(stats.lifetimeVolume).toLocaleString()} lb</strong></div>
+      <div class="readiness-chip"><span>Sessions</span><strong>${stats.sessionCount}</strong></div>
+      <div class="readiness-chip"><span>Last Performed</span><strong>${escapeHtml(stats.lastPerformed || "—")}</strong></div>
+      <div class="readiness-chip"><span>Avg Reps</span><strong>${stats.avgReps ? stats.avgReps.toFixed(1) : "—"}</strong></div>
+    </div>
+    ${badgeRow}
+    ${sparks}
+  `;
+}
+
 function renderTrackerProgress() {
   const panel = document.getElementById("trackerProgress");
   if (!panel) return;
@@ -1664,12 +2254,13 @@ function renderWorkout(draft = null) {
   }
 
   const draftExercises = draft?.exercises || [];
+  const recovery = calcRecoveryData();
 
   exercises.forEach((ex, exIndex) => {
     const draftEx = draftExercises[exIndex] || null;
     const options = getDayOptions(selectedDay, ex.name);
     const last = findLastPerformance(ex.name);
-    const suggested = suggestWeight(ex.name, last, ex.startWeight || "", ex.reps || 8);
+    const suggested = suggestWeight(ex.name, last, ex.startWeight || "", ex.reps || 8, recovery);
 
     const card = document.createElement("div");
     card.className = "exercise-card";
@@ -1718,7 +2309,7 @@ presetRow.innerHTML = `
     <input class="preset-weight" value="${escapeHtml(ex.startWeight || "")}" placeholder="135">
   </div>
   <button class="ghost" type="button">Use Preset</button>
-  <div class="exercise-suggest">Suggested: ${suggested.value || "—"}<br><small>${suggested.reason}</small></div>
+  <div class="exercise-suggest">${buildSuggestionHTML(last, suggested)}</div>
 `;
 
 const demoRow = document.createElement("div");
@@ -1735,6 +2326,28 @@ body.appendChild(presetRow);
 body.appendChild(demoRow);
 
     rebuildSetRows(body, ex.sets, suggested.value, draftEx?.entries || [], ex.name);
+
+    const stats = calcExerciseStats(ex.name);
+    const analyticsWrap = document.createElement("div");
+    analyticsWrap.className = "analytics-wrap";
+    const analyticsOpen = analyticsExpanded.has(ex.name);
+    analyticsWrap.innerHTML = `
+      <button class="ghost mini analytics-toggle" type="button">${analyticsOpen ? "Hide Analytics ▴" : "📊 Exercise Analytics ▾"}</button>
+      <div class="analytics-panel${analyticsOpen ? "" : " hidden"}">
+        ${stats ? buildAnalyticsHTML(stats) : `<div class="analytics-note">Log this movement once to unlock analytics.</div>`}
+      </div>
+    `;
+
+    const analyticsBtn = analyticsWrap.querySelector(".analytics-toggle");
+    const analyticsPanel = analyticsWrap.querySelector(".analytics-panel");
+    analyticsBtn.onclick = () => {
+      const nowOpen = analyticsPanel.classList.toggle("hidden") === false;
+      if (nowOpen) analyticsExpanded.add(ex.name);
+      else analyticsExpanded.delete(ex.name);
+      analyticsBtn.textContent = nowOpen ? "Hide Analytics ▴" : "📊 Exercise Analytics ▾";
+    };
+
+    body.appendChild(analyticsWrap);
 
     const selectInput = editGrid.querySelector(".edit-select");
     const setsInput = editGrid.querySelector(".edit-sets");
@@ -1778,8 +2391,9 @@ const demoBtn = demoRow.querySelector("button");
 
     presetInput.oninput = () => {
       exercises[exIndex].startWeight = presetInput.value.trim();
-      const liveSuggested = suggestWeight(ex.name, findLastPerformance(ex.name), exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8);
-      suggestText.innerHTML = `Suggested: ${liveSuggested.value || "—"}<br><small>${liveSuggested.reason}</small>`;
+      const livePerf = findLastPerformance(ex.name);
+      const liveSuggested = suggestWeight(ex.name, livePerf, exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8, recovery);
+      suggestText.innerHTML = buildSuggestionHTML(livePerf, liveSuggested);
       persistCurrentLayout();
       persistDraftForDay();
     };
@@ -1832,6 +2446,7 @@ function loadTemplate(day) {
 
   renderWorkout(draft);
   renderTabs();
+  renderReadinessCard();
   startSessionTimer();
 }
 
@@ -1858,13 +2473,28 @@ function saveWorkout() {
     workout.exercises.push({ name, sets });
   });
 
+  const priorWorkouts = state.workouts.slice();
+  const prs = detectPRs(workout, priorWorkouts);
+
   persistCurrentLayout();
   state.workouts.unshift(workout);
   state.nextWorkout = nextWorkout(selectedDay);
   clearDraftForDay(selectedDay);
   saveState();
 
-  showToast(`Saved. Next: ${state.nextWorkout}`, "success");
+  celebration = {
+    name: workout.name,
+    date: workout.date,
+    prs,
+    insight: generateCoachingInsight(workout, state.workouts)
+  };
+  renderCelebrationPanel();
+
+  if (prs.length) {
+    showToast(`🎉 ${prs.length} new PR${prs.length === 1 ? "" : "s"}! Next: ${state.nextWorkout}`, "success");
+  } else {
+    showToast(`Saved. Next: ${state.nextWorkout}`, "success");
+  }
   stopSessionTimer();
   loadTemplate(state.nextWorkout);
 }

@@ -26,6 +26,11 @@ const SPLITS = {
     label: "Rehab Bodybuilding",
     frequency: "3–4 days / week",
     routine: ["Rehab Upper A", "Rehab Lower A", "Rehab Upper B", "Rehab Lower B"]
+  },
+  kyle: {
+    label: "Kyle's Program",
+    frequency: "5 days / week",
+    routine: ["Kyle Chest", "Kyle Legs", "Kyle Back", "Kyle Shoulders", "Kyle Arms"]
   }
 };
 
@@ -175,6 +180,66 @@ const TEMPLATES = {
     { name: "Leg Extension", sets: 3, reps: 12, startWeight: "100", collapsed: true },
     { name: "Seated Calf Raise", sets: 3, reps: 15, startWeight: "90", collapsed: true },
     { name: "Prone Y Raise", sets: 2, reps: 12, startWeight: "5", collapsed: true }
+  ],
+  // Kyle's program — Mon Chest/Abs, Tue Legs (+triceps), Thu Back,
+  // Fri Shoulders/Abs, Sat Arms. Weights are his current working loads;
+  // duplicate slots are his heavy + back-off tiers.
+  "Kyle Chest": [
+    { name: "Barbell Bench Press", sets: 5, reps: 5, startWeight: "275", collapsed: false },
+    { name: "Barbell Bench Press", sets: 3, reps: 8, startWeight: "245", collapsed: true },
+    { name: "Incline Barbell Press", sets: 3, reps: 8, startWeight: "195", collapsed: true },
+    { name: "Incline Barbell Press", sets: 3, reps: 10, startWeight: "155", collapsed: true },
+    { name: "Machine Fly", sets: 3, reps: 10, startWeight: "115", collapsed: true },
+    { name: "Dumbbell Chest Press", sets: 3, reps: 10, startWeight: "55", collapsed: true },
+    { name: "Shoulder Complex", sets: 3, reps: 5, startWeight: "", collapsed: true },
+    { name: "Pushups", sets: 3, reps: 8, startWeight: "", collapsed: true },
+    { name: "Plank", sets: 3, reps: 30, startWeight: "", collapsed: true },
+    { name: "Bicycle Crunch", sets: 3, reps: 20, startWeight: "", collapsed: true }
+  ],
+  "Kyle Legs": [
+    { name: "Leg Press", sets: 5, reps: 5, startWeight: "450", collapsed: false },
+    { name: "EZ Bar Tricep Extension", sets: 3, reps: 10, startWeight: "85", collapsed: true },
+    { name: "Leg Press", sets: 3, reps: 8, startWeight: "360", collapsed: true },
+    { name: "EZ Bar Tricep Extension", sets: 3, reps: 10, startWeight: "75", collapsed: true },
+    { name: "Smith Squat with Calf Raise", sets: 3, reps: 10, startWeight: "120", collapsed: true },
+    { name: "Tricep Pulldown", sets: 3, reps: 10, startWeight: "52.5", collapsed: true },
+    { name: "Wall Sit", sets: 3, reps: 30, startWeight: "", collapsed: true },
+    { name: "Leg Extension", sets: 3, reps: 12, startWeight: "", collapsed: true }
+  ],
+  "Kyle Back": [
+    { name: "Deadlift", sets: 5, reps: 5, startWeight: "255", collapsed: false },
+    { name: "Pause Plate Shrug", sets: 3, reps: 10, startWeight: "45", collapsed: true },
+    { name: "Barbell Shrug", sets: 3, reps: 10, startWeight: "225", collapsed: true },
+    { name: "Forearm Complex", sets: 3, reps: 5, startWeight: "", collapsed: true },
+    { name: "Stiff-Leg Deadlift", sets: 3, reps: 8, startWeight: "155", collapsed: true },
+    { name: "Pullups", sets: 3, reps: 8, startWeight: "", collapsed: true },
+    { name: "Barbell Row", sets: 3, reps: 8, startWeight: "125", collapsed: true },
+    { name: "Lat Pulldown", sets: 3, reps: 10, startWeight: "100", collapsed: true },
+    { name: "Seated Row", sets: 3, reps: 10, startWeight: "100", collapsed: true }
+  ],
+  "Kyle Shoulders": [
+    { name: "Machine Shoulder Press", sets: 5, reps: 5, startWeight: "230", collapsed: false },
+    { name: "Machine Shoulder Press", sets: 3, reps: 8, startWeight: "160", collapsed: true },
+    { name: "Dumbbell Shoulder Press", sets: 3, reps: 10, startWeight: "60", collapsed: true },
+    { name: "Iso Shoulder Press", sets: 3, reps: 10, startWeight: "45", collapsed: true },
+    { name: "Dumbbell Lateral Raise", sets: 3, reps: 12, startWeight: "30", collapsed: true },
+    { name: "Barbell Bench Press", sets: 3, reps: 8, startWeight: "185", collapsed: true },
+    { name: "Incline Barbell Press", sets: 3, reps: 10, startWeight: "135", collapsed: true },
+    { name: "Crunch", sets: 3, reps: 20, startWeight: "", collapsed: true },
+    { name: "Russian Twist", sets: 3, reps: 20, startWeight: "", collapsed: true }
+  ],
+  "Kyle Arms": [
+    { name: "Barbell Curl", sets: 3, reps: 8, startWeight: "65", collapsed: false },
+    { name: "Forearm Extension", sets: 3, reps: 10, startWeight: "45", collapsed: true },
+    { name: "Dumbbell Curl", sets: 3, reps: 8, startWeight: "50", collapsed: true },
+    { name: "Dumbbell Tricep Extension", sets: 3, reps: 10, startWeight: "50", collapsed: true },
+    { name: "Dumbbell Curl", sets: 3, reps: 10, startWeight: "45", collapsed: true },
+    { name: "Dumbbell Tricep Extension", sets: 3, reps: 10, startWeight: "45", collapsed: true },
+    { name: "Outside Curl", sets: 3, reps: 10, startWeight: "25", collapsed: true },
+    { name: "Forearm Complex", sets: 3, reps: 5, startWeight: "", collapsed: true },
+    { name: "Stein Curl", sets: 3, reps: 10, startWeight: "25", collapsed: true },
+    { name: "Tricep Pulldown", sets: 3, reps: 10, startWeight: "42.5", collapsed: true },
+    { name: "Tricep Pulldown", sets: 3, reps: 12, startWeight: "37.5", collapsed: true }
   ]
 };
 
@@ -248,7 +313,32 @@ const EXERCISE_DEFAULTS = {
   "Prone Y Raise": { sets: 3, reps: 12, startWeight: "5" },
   "Cable External Rotation": { sets: 3, reps: 12, startWeight: "10" },
   "Eccentric Curl (Slow Negatives)": { sets: 2, reps: 12, startWeight: "15" },
-  "Incline Dumbbell Curl": { sets: 3, reps: 12, startWeight: "20" }
+  "Incline Dumbbell Curl": { sets: 3, reps: 12, startWeight: "20" },
+  "Leg Press": { sets: 3, reps: 10, startWeight: "360" },
+  "Machine Fly": { sets: 3, reps: 10, startWeight: "115" },
+  "Dumbbell Chest Press": { sets: 3, reps: 10, startWeight: "55" },
+  "Shoulder Complex": { sets: 3, reps: 5, startWeight: "" },
+  "Pushups": { sets: 3, reps: 8, startWeight: "" },
+  "EZ Bar Tricep Extension": { sets: 3, reps: 10, startWeight: "75" },
+  "Dumbbell Tricep Extension": { sets: 3, reps: 10, startWeight: "45" },
+  "Tricep Pulldown": { sets: 3, reps: 10, startWeight: "42.5" },
+  "Smith Squat with Calf Raise": { sets: 3, reps: 10, startWeight: "120" },
+  "Wall Sit": { sets: 3, reps: 30, startWeight: "" },
+  "Pause Plate Shrug": { sets: 3, reps: 10, startWeight: "45" },
+  "Barbell Shrug": { sets: 3, reps: 10, startWeight: "225" },
+  "Forearm Complex": { sets: 3, reps: 5, startWeight: "" },
+  "Stiff-Leg Deadlift": { sets: 3, reps: 8, startWeight: "155" },
+  "Dumbbell Shoulder Press": { sets: 3, reps: 10, startWeight: "60" },
+  "Iso Shoulder Press": { sets: 3, reps: 10, startWeight: "45" },
+  "Dumbbell Lateral Raise": { sets: 3, reps: 12, startWeight: "30" },
+  "Dumbbell Curl": { sets: 3, reps: 8, startWeight: "50" },
+  "Outside Curl": { sets: 3, reps: 10, startWeight: "25" },
+  "Stein Curl": { sets: 3, reps: 10, startWeight: "25" },
+  "Forearm Extension": { sets: 3, reps: 10, startWeight: "45" },
+  "Plank": { sets: 3, reps: 30, startWeight: "" },
+  "Bicycle Crunch": { sets: 3, reps: 20, startWeight: "" },
+  "Crunch": { sets: 3, reps: 20, startWeight: "" },
+  "Russian Twist": { sets: 3, reps: 20, startWeight: "" }
 };
 
 const EXERCISE_RULES = {
@@ -294,7 +384,32 @@ const EXERCISE_RULES = {
   "Prone Y Raise": 5,
   "Cable External Rotation": 5,
   "Eccentric Curl (Slow Negatives)": 5,
-  "Incline Dumbbell Curl": 5
+  "Incline Dumbbell Curl": 5,
+  "Leg Press": 10,
+  "Machine Fly": 10,
+  "Dumbbell Chest Press": 5,
+  "Shoulder Complex": 0,
+  "Pushups": 0,
+  "EZ Bar Tricep Extension": 5,
+  "Dumbbell Tricep Extension": 5,
+  "Tricep Pulldown": 2.5,
+  "Smith Squat with Calf Raise": 10,
+  "Wall Sit": 0,
+  "Pause Plate Shrug": 0,
+  "Barbell Shrug": 10,
+  "Forearm Complex": 0,
+  "Stiff-Leg Deadlift": 10,
+  "Dumbbell Shoulder Press": 5,
+  "Iso Shoulder Press": 5,
+  "Dumbbell Lateral Raise": 5,
+  "Dumbbell Curl": 5,
+  "Outside Curl": 5,
+  "Stein Curl": 5,
+  "Forearm Extension": 5,
+  "Plank": 0,
+  "Bicycle Crunch": 0,
+  "Crunch": 0,
+  "Russian Twist": 0
 };
 
 const EXERCISE_MUSCLES = {
@@ -340,7 +455,32 @@ const EXERCISE_MUSCLES = {
   "Prone Y Raise": ["rehab", "shoulders"],
   "Cable External Rotation": ["rehab"],
   "Eccentric Curl (Slow Negatives)": ["rehab", "arms"],
-  "Incline Dumbbell Curl": ["arms"]
+  "Incline Dumbbell Curl": ["arms"],
+  "Leg Press": ["quads"],
+  "Machine Fly": ["chest"],
+  "Dumbbell Chest Press": ["chest"],
+  "Shoulder Complex": ["rehab", "shoulders"],
+  "Pushups": ["chest"],
+  "EZ Bar Tricep Extension": ["arms"],
+  "Dumbbell Tricep Extension": ["arms"],
+  "Tricep Pulldown": ["arms"],
+  "Smith Squat with Calf Raise": ["quads", "calves"],
+  "Wall Sit": ["quads"],
+  "Pause Plate Shrug": ["back"],
+  "Barbell Shrug": ["back"],
+  "Forearm Complex": ["rehab", "arms"],
+  "Stiff-Leg Deadlift": ["hamstrings"],
+  "Dumbbell Shoulder Press": ["shoulders"],
+  "Iso Shoulder Press": ["shoulders"],
+  "Dumbbell Lateral Raise": ["shoulders"],
+  "Dumbbell Curl": ["arms"],
+  "Outside Curl": ["arms"],
+  "Stein Curl": ["arms"],
+  "Forearm Extension": ["arms"],
+  "Plank": ["core"],
+  "Bicycle Crunch": ["core"],
+  "Crunch": ["core"],
+  "Russian Twist": ["core"]
 };
 
 // Weekly hard-set targets per muscle group (evidence-based hypertrophy ranges)
@@ -354,7 +494,9 @@ const MUSCLE_TARGETS = {
   calves: { label: "Calves", min: 6, max: 12 },
   // Rehab compliance target — only surfaced on the rehab split or when
   // rehab work was actually logged in the trailing week
-  rehab: { label: "Rehab / Posture", min: 8, max: 30 }
+  rehab: { label: "Rehab / Posture", min: 8, max: 30 },
+  // Core surfaces only when ab work was logged in the trailing week
+  core: { label: "Core", min: 6, max: 20 }
 };
 
 // PPL default keeps continuity for anyone already mid-rotation
@@ -439,7 +581,32 @@ const EXERCISE_VIDEO_SEARCH = {
   "Prone Y Raise": "https://www.youtube.com/results?search_query=prone+Y+raise+lower+trap+exercise",
   "Cable External Rotation": "https://www.youtube.com/results?search_query=cable+external+rotation+rotator+cuff+exercise",
   "Eccentric Curl (Slow Negatives)": "https://www.youtube.com/results?search_query=eccentric+bicep+curl+tendonitis+rehab",
-  "Incline Dumbbell Curl": "https://www.youtube.com/results?search_query=Jeff+Nippard+incline+dumbbell+curl"
+  "Incline Dumbbell Curl": "https://www.youtube.com/results?search_query=Jeff+Nippard+incline+dumbbell+curl",
+  "Leg Press": "https://www.youtube.com/results?search_query=Jeff+Nippard+leg+press+tutorial",
+  "Machine Fly": "https://www.youtube.com/results?search_query=machine+fly+chest+tutorial",
+  "Dumbbell Chest Press": "https://www.youtube.com/results?search_query=dumbbell+chest+press+tutorial",
+  "Shoulder Complex": "https://www.youtube.com/results?search_query=shoulder+prehab+complex+dumbbell",
+  "Pushups": "https://www.youtube.com/results?search_query=perfect+pushup+form+tutorial",
+  "EZ Bar Tricep Extension": "https://www.youtube.com/results?search_query=ez+bar+tricep+extension+tutorial",
+  "Dumbbell Tricep Extension": "https://www.youtube.com/results?search_query=dumbbell+tricep+extension+tutorial",
+  "Tricep Pulldown": "https://www.youtube.com/results?search_query=cable+tricep+pulldown+tutorial",
+  "Smith Squat with Calf Raise": "https://www.youtube.com/results?search_query=smith+machine+squat+calf+raise",
+  "Wall Sit": "https://www.youtube.com/results?search_query=wall+sit+exercise+form",
+  "Pause Plate Shrug": "https://www.youtube.com/results?search_query=paused+plate+shrug+traps",
+  "Barbell Shrug": "https://www.youtube.com/results?search_query=barbell+shrug+tutorial",
+  "Forearm Complex": "https://www.youtube.com/results?search_query=forearm+strengthening+complex+dumbbell",
+  "Stiff-Leg Deadlift": "https://www.youtube.com/results?search_query=stiff+leg+deadlift+tutorial",
+  "Dumbbell Shoulder Press": "https://www.youtube.com/results?search_query=dumbbell+shoulder+press+tutorial",
+  "Iso Shoulder Press": "https://www.youtube.com/results?search_query=alternating+iso+hold+dumbbell+shoulder+press",
+  "Dumbbell Lateral Raise": "https://www.youtube.com/results?search_query=dumbbell+lateral+raise+tutorial",
+  "Dumbbell Curl": "https://www.youtube.com/results?search_query=dumbbell+bicep+curl+tutorial",
+  "Outside Curl": "https://www.youtube.com/results?search_query=offset+outside+dumbbell+curl",
+  "Stein Curl": "https://www.youtube.com/results?search_query=stein+curl+forearm+bicep",
+  "Forearm Extension": "https://www.youtube.com/results?search_query=forearm+extension+wrist+curl",
+  "Plank": "https://www.youtube.com/results?search_query=plank+form+tutorial",
+  "Bicycle Crunch": "https://www.youtube.com/results?search_query=bicycle+crunch+form+tutorial",
+  "Crunch": "https://www.youtube.com/results?search_query=crunch+form+tutorial",
+  "Russian Twist": "https://www.youtube.com/results?search_query=russian+twist+form+tutorial"
 };
 
 // ==============================
@@ -568,20 +735,17 @@ function formatTime(totalSeconds) {
 }
 
 function normalizeExerciseName(name) {
+  // Punctuation/plural normalization only — equipment words (machine,
+  // dumbbell, seated...) are meaningful and distinguish real variants,
+  // so stripping them would merge unrelated lifts' histories
   return String(name || "")
     .toLowerCase()
     .replace(/&/g, "and")
     .replace(/\//g, " ")
     .replace(/-/g, " ")
     .replace(/\([^)]*\)/g, " ")
-    .replace(/\bbarbell\b/g, "")
-    .replace(/\bcable\b/g, "")
-    .replace(/\bmachine\b/g, "")
-    .replace(/\bseated\b/g, "")
-    .replace(/\bstanding\b/g, "")
     .replace(/\btricep\b/g, "triceps")
     .replace(/\bpullups\b/g, "pull up")
-    .replace(/\bpull-ups\b/g, "pull up")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -1785,8 +1949,9 @@ function calcVolumeStatus(sets, target) {
 
 function activeMuscleTargets(muscleSets) {
   return Object.entries(MUSCLE_TARGETS).filter(([key]) => {
-    if (key !== "rehab") return true;
-    return state.settings?.split === "rehab" || (muscleSets[key] || 0) > 0;
+    if (key === "rehab") return state.settings?.split === "rehab" || (muscleSets[key] || 0) > 0;
+    if (key === "core") return (muscleSets[key] || 0) > 0;
+    return true;
   });
 }
 
@@ -2344,6 +2509,43 @@ function applyCoachSettings(daysPerWeek, split) {
   }
 }
 
+let kyleNotesCollapsed = true;
+
+function buildKyleNotesHTML() {
+  return `
+    <div class="program-notes">
+      <div class="program-notes-head">
+        <div class="coach-volume-title">Kyle's Program Notes</div>
+        <button class="ghost mini" id="kyleNotesToggleBtn" type="button">${kyleNotesCollapsed ? "Show Notes" : "Hide Notes"}</button>
+      </div>
+      <div class="program-notes-body${kyleNotesCollapsed ? " hidden" : ""}">
+        <div class="program-notes-grid">
+          <div class="program-note">
+            <strong>Notation Key</strong>
+            <span>** increase weight · HFP hold until pain resolves · [Wx] extended reps at higher weight · [Rx] extended reps at same weight, 1-month break · + upward weight progression each set · xM months at weight. Follow the 2-month break schedule.</span>
+          </div>
+          <div class="program-note">
+            <strong>Recovery Timeline</strong>
+            <span>Injury 2/21/25 · Surgery 3/31/25 · All clear 6/18/25 · Return to form (non-bicep) 11/18/25 · Return to form (all) TBD. Add biceps back after recovered — currently only light forearm work and holds.</span>
+          </div>
+          <div class="program-note">
+            <strong>Current Holds &amp; HFP</strong>
+            <span>Shrugs hold at 225 · Pull-ups hold until 200 on Machine Pulldown · HFP: Leg Extension, Machine Pulldown (100), Machine Rows (100), Forearm Extensions (45). Barbell Curls progress upward each set, flip at 105.</span>
+          </div>
+          <div class="program-note">
+            <strong>PR 3-Lift Reps · 1,005 lb total @ 210 BW</strong>
+            <span>Bench Press 5×5 @ 285 · SM Back Squat 5×5 @ 375 · Deadlift 5×5 @ 345. Attempt max lifts when reps are high.</span>
+          </div>
+          <div class="program-note">
+            <strong>Abs Routine</strong>
+            <span>Planks · Bikes · Crunches · Rotations (logged on Chest and Shoulders days). 26-32-22.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderCoachPanel() {
   const panel = document.getElementById("coachPanel");
   if (!panel) return;
@@ -2355,8 +2557,8 @@ function renderCoachPanel() {
   const pace = Math.max(0, Math.min(100, Math.round((weeklySessions / settings.daysPerWeek) * 100)));
   const tip = buildCoachTip(weeklySessions, muscleSets);
   const recommendedSplit = splitForDays(settings.daysPerWeek);
-  // Rehab is a deliberate therapeutic choice — never suggest switching away
-  const splitMismatch = settings.split !== "rehab" && recommendedSplit !== settings.split;
+  // Rehab and Kyle's program are deliberate choices — never suggest switching away
+  const splitMismatch = !["rehab", "kyle"].includes(settings.split) && recommendedSplit !== settings.split;
 
   const dayOptions = [2, 3, 4, 5, 6]
     .map(n => `<option value="${n}" ${n === settings.daysPerWeek ? "selected" : ""}>${n} days / week</option>`)
@@ -2412,7 +2614,9 @@ function renderCoachPanel() {
             ? `For ${settings.daysPerWeek} days/week, ${SPLITS[recommendedSplit].label} usually fits best. <button class="ghost mini" id="coachApplySplitBtn" type="button">Switch</button>`
             : settings.split === "rehab"
               ? "Rehab mode: elbow-friendly pressing, neutral-grip pulling, slow-eccentric curls for the bicep tendon, and chin tucks / thoracic work for head posture in every session. Stop any set that causes sharp pain."
-              : "Split matches your schedule. The rotation continues from wherever you left off — no week is ever wasted."}
+              : settings.split === "kyle"
+                ? "Kyle's program: Mon Chest/Abs · Tue Legs · Wed Off/Yoga · Thu Back · Fri Shoulders/Abs · Sat Arms · Sun Off. Program key and recovery notes below."
+                : "Split matches your schedule. The rotation continues from wherever you left off — no week is ever wasted."}
         </div>
       </div>
 
@@ -2421,6 +2625,8 @@ function renderCoachPanel() {
         ${volumeBars}
         <div class="coach-volume-legend">Marker = weekly minimum for growth. Land between the marker and the end of the bar.</div>
       </div>
+
+      ${settings.split === "kyle" ? buildKyleNotesHTML() : ""}
     </section>
   `;
 
@@ -2436,6 +2642,13 @@ function renderCoachPanel() {
   if (applyBtn) {
     applyBtn.onclick = () => {
       applyCoachSettings(state.settings.daysPerWeek, recommendedSplit);
+      renderCoachPanel();
+    };
+  }
+  const kyleBtn = document.getElementById("kyleNotesToggleBtn");
+  if (kyleBtn) {
+    kyleBtn.onclick = () => {
+      kyleNotesCollapsed = !kyleNotesCollapsed;
       renderCoachPanel();
     };
   }

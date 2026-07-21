@@ -3331,8 +3331,314 @@ function wireButtons() {
 }
 
 // ==============================
+// QUICK LOG
+// ==============================
+
+let qlDay = null;
+let qlEntries = [];
+let qlSaved = null;
+
+function qlWeightStep(name) {
+  const jump = EXERCISE_RULES[name];
+  return jump && jump > 0 ? jump : 5;
+}
+
+function qlBuildEntry(name, sets, reps, startWeight = "") {
+  const last = findLastPerformance(name);
+  const suggestion = suggestWeight(name, last, startWeight, reps);
+  const suggested = parseFloat(suggestion.value);
+  const weight = Number.isFinite(suggested)
+    ? suggested
+    : (EXERCISE_RULES[name] === 0 ? 0 : "");
+
+  return {
+    name,
+    weight,
+    reps,
+    setReps: Array.from({ length: Math.max(1, sets) }, () => reps),
+    skipped: false,
+    lastLabel: last
+      ? `${last.weight} lb × ${last.sets.map(s => s.reps).join(" / ")}`
+      : ""
+  };
+}
+
+function qlLoadDay(day) {
+  qlDay = day;
+  qlSaved = null;
+  qlEntries = getLayoutForDay(day).map(t => qlBuildEntry(t.name, t.sets, t.reps, t.startWeight));
+
+  const dateEl = document.getElementById("qlDate");
+  if (dateEl) dateEl.value = todayString();
+
+  renderQuickLog();
+}
+
+function renderQuickLog() {
+  renderQuickLogChips();
+  renderQuickLogList();
+  renderQuickLogAdd();
+  renderQuickLogDone();
+}
+
+function renderQuickLogChips() {
+  const wrap = document.getElementById("qlDayChips");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+
+  getRoutine().forEach(day => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `ql-chip${day === qlDay ? " active" : ""}`;
+    btn.innerHTML = escapeHtml(day) + (day === state.nextWorkout ? '<span class="ql-chip-next">next</span>' : "");
+    btn.onclick = () => qlLoadDay(day);
+    wrap.appendChild(btn);
+  });
+}
+
+function qlBuildCard(entry, index) {
+  const card = document.createElement("div");
+  card.className = `ql-card${entry.skipped ? " skipped" : ""}`;
+
+  const chips = entry.setReps.map((reps, setIndex) => `
+    <button class="ql-set-chip${reps > 0 ? "" : " off"}" data-set="${setIndex}" type="button">
+      <span>Set ${setIndex + 1}</span>
+      <strong>${reps > 0 ? reps : "✕"}</strong>
+    </button>
+  `).join("");
+
+  card.innerHTML = `
+    <div class="ql-card-head">
+      <div class="ql-card-title">
+        <strong>${escapeHtml(entry.name)}</strong>
+        <span class="ql-last">${entry.lastLabel ? `Last: ${escapeHtml(entry.lastLabel)}` : "First log — sets your baseline"}</span>
+      </div>
+      <button class="ql-skip" type="button">${entry.skipped ? "Undo" : "Skip"}</button>
+    </div>
+    <div class="ql-card-body${entry.skipped ? " hidden" : ""}">
+      <div class="ql-stepper-row">
+        <div class="ql-stepper">
+          <span class="ql-stepper-label">Weight (lb)</span>
+          <div class="ql-stepper-controls">
+            <button class="ql-step" data-act="wt-down" type="button">−</button>
+            <input class="mono ql-value" data-act="wt" inputmode="decimal" value="${entry.weight === "" ? "" : escapeHtml(String(entry.weight))}" placeholder="0" />
+            <button class="ql-step" data-act="wt-up" type="button">＋</button>
+          </div>
+        </div>
+        <div class="ql-stepper">
+          <span class="ql-stepper-label">Reps per set</span>
+          <div class="ql-stepper-controls">
+            <button class="ql-step" data-act="rep-down" type="button">−</button>
+            <input class="mono ql-value" data-act="rep" inputmode="numeric" value="${entry.reps}" />
+            <button class="ql-step" data-act="rep-up" type="button">＋</button>
+          </div>
+        </div>
+      </div>
+      <div class="ql-sets-head">
+        <span class="ql-stepper-label">Tap a set if you fell short</span>
+        <div class="ql-sets-count">
+          <button class="ql-step mini" data-act="set-down" type="button">−</button>
+          <button class="ql-step mini" data-act="set-up" type="button">＋</button>
+        </div>
+      </div>
+      <div class="ql-set-chips">${chips}</div>
+    </div>
+  `;
+
+  card.querySelector(".ql-skip").onclick = () => {
+    entry.skipped = !entry.skipped;
+    renderQuickLogList();
+  };
+
+  const weightInput = card.querySelector('[data-act="wt"]');
+  weightInput.onchange = () => {
+    const parsed = parseFloat(weightInput.value);
+    entry.weight = Number.isFinite(parsed) ? Math.max(0, parsed) : "";
+    renderQuickLogList();
+  };
+
+  const repInput = card.querySelector('[data-act="rep"]');
+  repInput.onchange = () => {
+    const parsed = parseInt(repInput.value, 10);
+    if (Number.isFinite(parsed)) {
+      entry.reps = Math.min(50, Math.max(1, parsed));
+      entry.setReps = entry.setReps.map(() => entry.reps);
+    }
+    renderQuickLogList();
+  };
+
+  const step = qlWeightStep(entry.name);
+  const actions = {
+    "wt-down": () => { entry.weight = Math.max(0, parseNum(entry.weight) - step); },
+    "wt-up": () => { entry.weight = parseNum(entry.weight) + step; },
+    "rep-down": () => {
+      entry.reps = Math.max(1, entry.reps - 1);
+      entry.setReps = entry.setReps.map(() => entry.reps);
+    },
+    "rep-up": () => {
+      entry.reps = Math.min(50, entry.reps + 1);
+      entry.setReps = entry.setReps.map(() => entry.reps);
+    },
+    "set-down": () => { if (entry.setReps.length > 1) entry.setReps.pop(); },
+    "set-up": () => { if (entry.setReps.length < 8) entry.setReps.push(entry.reps); }
+  };
+
+  card.querySelectorAll(".ql-step").forEach(btn => {
+    btn.onclick = () => {
+      actions[btn.dataset.act]?.();
+      renderQuickLogList();
+    };
+  });
+
+  card.querySelectorAll(".ql-set-chip").forEach(chip => {
+    chip.onclick = () => {
+      const setIndex = parseInt(chip.dataset.set, 10);
+      const current = entry.setReps[setIndex];
+      // Each tap drops the set by one rep; at zero the set is skipped, and
+      // one more tap wraps it back to the full target
+      entry.setReps[setIndex] = current > 0 ? current - 1 : entry.reps;
+      renderQuickLogList();
+    };
+  });
+
+  return card;
+}
+
+function renderQuickLogList() {
+  const list = document.getElementById("qlList");
+  if (!list) return;
+  list.innerHTML = "";
+  qlEntries.forEach((entry, index) => list.appendChild(qlBuildCard(entry, index)));
+
+  const saveBtn = document.getElementById("qlSaveBtn");
+  if (saveBtn && qlDay) saveBtn.textContent = `Save ${qlDay}`;
+}
+
+function renderQuickLogAdd() {
+  const select = document.getElementById("qlAddSelect");
+  if (!select) return;
+
+  const existing = new Set(qlEntries.map(e => e.name));
+  const options = getDayOptions(qlDay).filter(name => !existing.has(name));
+
+  select.innerHTML = '<option value="">＋ Pick an exercise…</option>' +
+    options.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+
+  select.onchange = () => {
+    if (!select.value) return;
+    const d = getDefaultExercise(select.value);
+    qlEntries.push(qlBuildEntry(d.name, d.sets, d.reps, d.startWeight));
+    renderQuickLogList();
+    renderQuickLogAdd();
+  };
+}
+
+function renderQuickLogDone() {
+  const panel = document.getElementById("qlDone");
+  const editor = document.getElementById("qlEditor");
+  const saveBar = document.getElementById("qlSaveBar");
+  if (!panel || !editor || !saveBar) return;
+
+  if (!qlSaved) {
+    panel.innerHTML = "";
+    editor.classList.remove("hidden");
+    saveBar.classList.remove("hidden");
+    return;
+  }
+
+  editor.classList.add("hidden");
+  saveBar.classList.add("hidden");
+
+  const prBadges = qlSaved.prs.map(pr => `
+    <div class="pr-badge">
+      <div class="pr-badge-icon">🏅</div>
+      <div>
+        <strong>${escapeHtml(pr.label)}</strong>
+        <span>${escapeHtml(pr.detail)}</span>
+      </div>
+    </div>
+  `).join("");
+
+  panel.innerHTML = `
+    <div class="celebrate-card${qlSaved.prs.length ? " has-pr" : ""} ql-done-card">
+      <div class="celebrate-kicker">Workout Saved</div>
+      <div class="celebrate-title">${escapeHtml(qlSaved.name)} · ${escapeHtml(qlSaved.date)}</div>
+      <div class="ql-done-sub">${qlSaved.count} exercise${qlSaved.count === 1 ? "" : "s"} logged${qlSaved.prs.length ? ` · ${qlSaved.prs.length} PR${qlSaved.prs.length === 1 ? "" : "s"} 🎉` : ""}</div>
+      ${prBadges ? `<div class="pr-badge-row">${prBadges}</div>` : ""}
+      ${qlSaved.insight ? `<div class="insight-box"><span class="insight-icon">💡</span><span>${escapeHtml(qlSaved.insight)}</span></div>` : ""}
+      <div class="ql-done-actions">
+        <button class="primary ql-big-btn" id="qlNextBtn" type="button">Log Next: ${escapeHtml(state.nextWorkout)}</button>
+        <button class="ghost ql-big-btn" id="qlAgainBtn" type="button">Log Another Day</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("qlNextBtn").onclick = () => qlLoadDay(state.nextWorkout);
+  document.getElementById("qlAgainBtn").onclick = () => qlLoadDay(qlDay);
+}
+
+function qlSaveWorkout() {
+  if (!qlDay) return;
+
+  const workout = {
+    name: qlDay,
+    date: document.getElementById("qlDate").value || todayString(),
+    bodyWeight: (document.getElementById("qlBodyWt")?.value || "").trim(),
+    focusNotes: "",
+    notes: (document.getElementById("qlNotes")?.value || "").trim(),
+    exercises: []
+  };
+
+  qlEntries.forEach(entry => {
+    if (entry.skipped || entry.weight === "") return;
+    const weight = String(entry.weight);
+    const sets = entry.setReps
+      .filter(reps => reps > 0)
+      .map(reps => ({ weight, reps: String(reps) }));
+    if (sets.length) workout.exercises.push({ name: entry.name, sets });
+  });
+
+  if (!workout.exercises.length) {
+    showToast("Nothing to save — fill in at least one exercise", "warn");
+    return;
+  }
+
+  const priorWorkouts = state.workouts.slice();
+  const prs = detectPRs(workout, priorWorkouts);
+
+  state.workouts.unshift(workout);
+  state.nextWorkout = nextWorkout(qlDay);
+  saveState();
+
+  qlSaved = {
+    name: workout.name,
+    date: workout.date,
+    count: workout.exercises.length,
+    prs,
+    insight: generateCoachingInsight(workout, state.workouts)
+  };
+
+  const notesEl = document.getElementById("qlNotes");
+  if (notesEl) notesEl.value = "";
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  renderQuickLog();
+
+  if (prs.length) {
+    showToast(`🎉 ${prs.length} new PR${prs.length === 1 ? "" : "s"}! Next: ${state.nextWorkout}`, "success");
+  } else {
+    showToast(`Saved. Next: ${state.nextWorkout}`, "success");
+  }
+}
+
+// ==============================
 // INIT
 // ==============================
+
+function initQuickLogPage() {
+  document.getElementById("qlSaveBtn").onclick = qlSaveWorkout;
+  qlLoadDay(state.nextWorkout);
+}
 
 function initPowerPage() {
   renderStats();
@@ -3359,6 +3665,11 @@ function initWorkoutPage() {
 function init() {
   if (currentPage === "power") {
     initPowerPage();
+    return;
+  }
+
+  if (currentPage === "quicklog") {
+    initQuickLogPage();
     return;
   }
 

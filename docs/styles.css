@@ -637,6 +637,9 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
 .sticky-actions{
   position:sticky;
   bottom:0;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
   padding-top:12px;
   margin-top:12px;
   background:linear-gradient(180deg, transparent, rgba(14,19,26,.96) 45%);

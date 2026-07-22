@@ -3151,7 +3151,13 @@ function loadTemplate(day) {
   startSessionTimer();
 }
 
-function saveWorkout() {
+function saveProgress() {
+  persistCurrentLayout();
+  persistDraftForDay();
+  showToast("Progress saved", "success");
+}
+
+function completeWorkout() {
   const workout = {
     name: selectedDay,
     date: document.getElementById("wkDate").value || todayString(),
@@ -3194,7 +3200,7 @@ function saveWorkout() {
   if (prs.length) {
     showToast(`🎉 ${prs.length} new PR${prs.length === 1 ? "" : "s"}! Next: ${state.nextWorkout}`, "success");
   } else {
-    showToast(`Saved. Next: ${state.nextWorkout}`, "success");
+    showToast(`Workout complete. Next: ${state.nextWorkout}`, "success");
   }
   stopSessionTimer();
   loadTemplate(state.nextWorkout);
@@ -3297,7 +3303,8 @@ function importLog(file) {
 function wireButtons() {
   if (currentPage !== "workout") return;
 
-  document.getElementById("saveBtn").onclick = saveWorkout;
+  document.getElementById("saveBtn").onclick = saveProgress;
+  document.getElementById("completeBtn").onclick = completeWorkout;
   document.getElementById("loadNextBtn").onclick = () => loadTemplate(state.nextWorkout);
   document.getElementById("loadTplBtn").onclick = () => {
     const day = document.getElementById("wkName").value.trim();

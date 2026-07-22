@@ -1730,29 +1730,34 @@ button.danger{
 }
 
 .ql-set-chip{
-  flex:1;
-  min-width:64px;
-  max-width:110px;
-  min-height:58px;
+  flex:1 1 150px;
+  min-height:48px;
   display:flex;
-  flex-direction:column;
   align-items:center;
-  justify-content:center;
-  gap:2px;
-  padding:6px;
+  justify-content:space-between;
+  gap:8px;
+  padding:6px 6px 6px 12px;
   border-radius:12px;
   border:1px solid rgba(95,138,112,.4);
   background:rgba(95,138,112,.1);
 }
 
-.ql-set-chip span{
+.ql-set-label{
   color:var(--muted);
   font-size:.62rem;
   text-transform:uppercase;
   letter-spacing:.06em;
 }
 
-.ql-set-chip strong{
+.ql-set-stepper{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.ql-set-value{
+  min-width:22px;
+  text-align:center;
   font-family:'Rajdhani',sans-serif;
   font-size:1.2rem;
   color:#b8d0bf;
@@ -1764,7 +1769,7 @@ button.danger{
   background:rgba(255,255,255,.02);
 }
 
-.ql-set-chip.off strong{color:var(--dim)}
+.ql-set-chip.off .ql-set-value{color:var(--dim)}
 
 .ql-add,
 .ql-notes{

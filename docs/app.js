@@ -3450,10 +3450,14 @@ function qlBuildCard(entry, index) {
   card.className = `ql-card${entry.skipped ? " skipped" : ""}`;
 
   const chips = entry.setReps.map((reps, setIndex) => `
-    <button class="ql-set-chip${reps > 0 ? "" : " off"}" data-set="${setIndex}" type="button">
-      <span>Set ${setIndex + 1}</span>
-      <strong>${reps > 0 ? reps : "✕"}</strong>
-    </button>
+    <div class="ql-set-chip${reps > 0 ? "" : " off"}">
+      <span class="ql-set-label">Set ${setIndex + 1}</span>
+      <div class="ql-set-stepper">
+        <button class="ql-step mini" data-act="set-rep-down" data-set="${setIndex}" type="button">−</button>
+        <strong class="ql-set-value">${reps > 0 ? reps : "✕"}</strong>
+        <button class="ql-step mini" data-act="set-rep-up" data-set="${setIndex}" type="button">＋</button>
+      </div>
+    </div>
   `).join("");
 
   card.innerHTML = `
@@ -3484,7 +3488,7 @@ function qlBuildCard(entry, index) {
         </div>
       </div>
       <div class="ql-sets-head">
-        <span class="ql-stepper-label">Tap a set if you fell short</span>
+        <span class="ql-stepper-label">Sets</span>
         <div class="ql-sets-count">
           <button class="ql-step mini" data-act="set-down" type="button">−</button>
           <button class="ql-step mini" data-act="set-up" type="button">＋</button>
@@ -3529,23 +3533,15 @@ function qlBuildCard(entry, index) {
       entry.setReps = entry.setReps.map(() => entry.reps);
     },
     "set-down": () => { if (entry.setReps.length > 1) entry.setReps.pop(); },
-    "set-up": () => { if (entry.setReps.length < 8) entry.setReps.push(entry.reps); }
+    "set-up": () => { if (entry.setReps.length < 8) entry.setReps.push(entry.reps); },
+    "set-rep-down": (i) => { entry.setReps[i] = Math.max(0, entry.setReps[i] - 1); },
+    "set-rep-up": (i) => { entry.setReps[i] = Math.min(50, entry.setReps[i] + 1); }
   };
 
   card.querySelectorAll(".ql-step").forEach(btn => {
     btn.onclick = () => {
-      actions[btn.dataset.act]?.();
-      renderQuickLogList();
-    };
-  });
-
-  card.querySelectorAll(".ql-set-chip").forEach(chip => {
-    chip.onclick = () => {
-      const setIndex = parseInt(chip.dataset.set, 10);
-      const current = entry.setReps[setIndex];
-      // Each tap drops the set by one rep; at zero the set is skipped, and
-      // one more tap wraps it back to the full target
-      entry.setReps[setIndex] = current > 0 ? current - 1 : entry.reps;
+      const setIndex = btn.dataset.set !== undefined ? parseInt(btn.dataset.set, 10) : undefined;
+      actions[btn.dataset.act]?.(setIndex);
       renderQuickLogList();
     };
   });

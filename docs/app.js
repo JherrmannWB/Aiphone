@@ -3057,14 +3057,22 @@ const warmupBtn = demoRow.querySelector(".warmup-btn");
     setsInput.oninput = () => {
       exercises[exIndex].sets = Math.max(1, parseInt(setsInput.value || "1", 10));
       persistCurrentLayout();
-      renderWorkout();
+      const livePerf = findLastPerformance(ex.name);
+      const liveSuggested = suggestWeight(ex.name, livePerf, exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8, recovery);
+      rebuildSetRows(body, exercises[exIndex].sets, liveSuggested.value, [], ex.name);
+      suggestText.innerHTML = buildSuggestionHTML(livePerf, liveSuggested);
+      renderTrackerProgress();
       persistDraftForDay();
     };
 
     repsInput.oninput = () => {
       exercises[exIndex].reps = Math.max(1, parseInt(repsInput.value || "1", 10));
       persistCurrentLayout();
-      renderWorkout();
+      const livePerf = findLastPerformance(ex.name);
+      const liveSuggested = suggestWeight(ex.name, livePerf, exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8, recovery);
+      rebuildSetRows(body, exercises[exIndex].sets, liveSuggested.value, [], ex.name);
+      suggestText.innerHTML = buildSuggestionHTML(livePerf, liveSuggested);
+      renderTrackerProgress();
       persistDraftForDay();
     };
 

@@ -642,6 +642,7 @@ function defaultState() {
     nextWorkout: "Push A",
     customLayouts: {},
     drafts: {},
+    qlDrafts: {},
     userMaxes: { ...USER_MAXES_DEFAULT },
     bodyMetrics: { ...BODY_METRICS_DEFAULT },
     settings: { ...SETTINGS_DEFAULT }
@@ -669,6 +670,7 @@ function loadState() {
       nextWorkout: routine.includes(parsed.nextWorkout) ? parsed.nextWorkout : routine[0],
       customLayouts: parsed.customLayouts && typeof parsed.customLayouts === "object" ? parsed.customLayouts : {},
       drafts: parsed.drafts && typeof parsed.drafts === "object" ? parsed.drafts : {},
+      qlDrafts: parsed.qlDrafts && typeof parsed.qlDrafts === "object" ? parsed.qlDrafts : {},
       userMaxes: parsed.userMaxes && typeof parsed.userMaxes === "object"
         ? { ...USER_MAXES_DEFAULT, ...parsed.userMaxes }
         : { ...USER_MAXES_DEFAULT },
@@ -1581,6 +1583,28 @@ function clearDraftForDay(day) {
 function getDraftForDay(day) {
   const draft = state.drafts?.[day];
   if (!draft || !Array.isArray(draft.exercises)) return null;
+  return deepClone(draft);
+}
+
+function persistQlDraft() {
+  if (!qlDay) return;
+  state.qlDrafts[qlDay] = {
+    date: document.getElementById("qlDate")?.value || todayString(),
+    bodyWeight: document.getElementById("qlBodyWt")?.value || "",
+    notes: document.getElementById("qlNotes")?.value || "",
+    entries: deepClone(qlEntries)
+  };
+  saveState();
+}
+
+function clearQlDraft(day) {
+  delete state.qlDrafts[day];
+  saveState();
+}
+
+function getQlDraft(day) {
+  const draft = state.qlDrafts?.[day];
+  if (!draft || !Array.isArray(draft.entries)) return null;
   return deepClone(draft);
 }
 
@@ -3228,6 +3252,7 @@ function exportLog() {
     nextWorkout: state.nextWorkout,
     customLayouts: state.customLayouts,
     drafts: state.drafts,
+    qlDrafts: state.qlDrafts,
     userMaxes: state.userMaxes,
     bodyMetrics: state.bodyMetrics,
     settings: state.settings,
@@ -3276,6 +3301,7 @@ function importLog(file) {
       nextWorkout: importedRoutine.includes(parsed.nextWorkout) ? parsed.nextWorkout : importedRoutine[0],
       customLayouts: parsed.customLayouts && typeof parsed.customLayouts === "object" ? parsed.customLayouts : {},
       drafts: parsed.drafts && typeof parsed.drafts === "object" ? parsed.drafts : {},
+      qlDrafts: parsed.qlDrafts && typeof parsed.qlDrafts === "object" ? parsed.qlDrafts : {},
       userMaxes: parsed.userMaxes && typeof parsed.userMaxes === "object"
         ? { ...USER_MAXES_DEFAULT, ...parsed.userMaxes }
         : { ...USER_MAXES_DEFAULT },
@@ -3381,10 +3407,18 @@ function qlBuildEntry(name, sets, reps, startWeight = "") {
 function qlLoadDay(day) {
   qlDay = day;
   qlSaved = null;
-  qlEntries = getLayoutForDay(day).map(t => qlBuildEntry(t.name, t.sets, t.reps, t.startWeight));
+  const draft = getQlDraft(day);
+  qlEntries = draft ? draft.entries : getLayoutForDay(day).map(t => qlBuildEntry(t.name, t.sets, t.reps, t.startWeight));
 
   const dateEl = document.getElementById("qlDate");
-  if (dateEl) dateEl.value = todayString();
+  if (dateEl) dateEl.value = draft?.date || todayString();
+
+  if (draft) {
+    const bwEl = document.getElementById("qlBodyWt");
+    if (bwEl) bwEl.value = draft.bodyWeight || "";
+    const notesEl = document.getElementById("qlNotes");
+    if (notesEl) notesEl.value = draft.notes || "";
+  }
 
   renderQuickLog();
 }
@@ -3524,9 +3558,6 @@ function renderQuickLogList() {
   if (!list) return;
   list.innerHTML = "";
   qlEntries.forEach((entry, index) => list.appendChild(qlBuildCard(entry, index)));
-
-  const saveBtn = document.getElementById("qlSaveBtn");
-  if (saveBtn && qlDay) saveBtn.textContent = `Save ${qlDay}`;
 }
 
 function renderQuickLogAdd() {
@@ -3592,7 +3623,13 @@ function renderQuickLogDone() {
   document.getElementById("qlAgainBtn").onclick = () => qlLoadDay(qlDay);
 }
 
-function qlSaveWorkout() {
+function qlSaveProgress() {
+  if (!qlDay) return;
+  persistQlDraft();
+  showToast("Progress saved", "success");
+}
+
+function qlCompleteWorkout() {
   if (!qlDay) return;
 
   const workout = {
@@ -3623,6 +3660,7 @@ function qlSaveWorkout() {
 
   state.workouts.unshift(workout);
   state.nextWorkout = nextWorkout(qlDay);
+  clearQlDraft(qlDay);
   saveState();
 
   qlSaved = {
@@ -3642,7 +3680,7 @@ function qlSaveWorkout() {
   if (prs.length) {
     showToast(`🎉 ${prs.length} new PR${prs.length === 1 ? "" : "s"}! Next: ${state.nextWorkout}`, "success");
   } else {
-    showToast(`Saved. Next: ${state.nextWorkout}`, "success");
+    showToast(`Workout complete. Next: ${state.nextWorkout}`, "success");
   }
 }
 
@@ -3651,7 +3689,8 @@ function qlSaveWorkout() {
 // ==============================
 
 function initQuickLogPage() {
-  document.getElementById("qlSaveBtn").onclick = qlSaveWorkout;
+  document.getElementById("qlSaveBtn").onclick = qlSaveProgress;
+  document.getElementById("qlCompleteBtn").onclick = qlCompleteWorkout;
   qlLoadDay(state.nextWorkout);
 }
 

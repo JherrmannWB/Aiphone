@@ -1784,13 +1784,14 @@ button.danger{
   background:linear-gradient(180deg, transparent, rgba(5,7,10,.92) 38%);
   display:flex;
   justify-content:center;
+  gap:10px;
 }
 
 .ql-save-bar.hidden{display:none}
 
 .ql-save-btn{
-  width:100%;
-  max-width:612px;
+  flex:1;
+  max-width:300px;
   min-height:56px;
   font-size:1.05rem;
   font-weight:600;

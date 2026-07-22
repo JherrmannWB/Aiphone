@@ -1556,6 +1556,25 @@ button.danger{
   align-items:stretch;
 }
 
+.ql-split-bar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.ql-split-bar label{
+  color:var(--muted);
+  font-size:.68rem;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+
+.ql-split-bar select{
+  flex:1;
+  max-width:260px;
+}
+
 .ql-day-chips{
   display:flex;
   gap:8px;
@@ -1730,13 +1749,11 @@ button.danger{
 }
 
 .ql-set-chip{
-  flex:1 1 150px;
-  min-height:48px;
+  flex:1 1 210px;
   display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  padding:6px 6px 6px 12px;
+  flex-direction:column;
+  gap:6px;
+  padding:8px 10px;
   border-radius:12px;
   border:1px solid rgba(95,138,112,.4);
   background:rgba(95,138,112,.1);
@@ -1749,9 +1766,16 @@ button.danger{
   letter-spacing:.06em;
 }
 
+.ql-set-rows{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
 .ql-set-stepper{
   display:flex;
   align-items:center;
+  justify-content:space-between;
   gap:6px;
 }
 
@@ -1762,6 +1786,13 @@ button.danger{
   font-size:1.2rem;
   color:#b8d0bf;
   line-height:1;
+}
+
+.ql-set-unit{
+  font-size:.6rem;
+  color:var(--muted);
+  text-transform:uppercase;
+  margin-left:2px;
 }
 
 .ql-set-chip.off{

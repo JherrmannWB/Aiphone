@@ -1605,7 +1605,13 @@ function clearQlDraft(day) {
 function getQlDraft(day) {
   const draft = state.qlDrafts?.[day];
   if (!draft || !Array.isArray(draft.entries)) return null;
-  return deepClone(draft);
+  const cloned = deepClone(draft);
+  cloned.entries.forEach(entry => {
+    if (!Array.isArray(entry.setWeights)) {
+      entry.setWeights = entry.setReps.map(() => entry.weight);
+    }
+  });
+  return cloned;
 }
 
 function attachDraftAutoSave() {
@@ -2511,6 +2517,12 @@ function buildReadinessRecommendation(recovery, groupDays) {
   return "Recovery is good. Push your working sets with intent.";
 }
 
+function buildSplitOptionsHTML(selectedSplit) {
+  return Object.entries(SPLITS)
+    .map(([key, s]) => `<option value="${key}" ${key === selectedSplit ? "selected" : ""}>${s.label} (${s.frequency})</option>`)
+    .join("");
+}
+
 function applyCoachSettings(daysPerWeek, split) {
   const routineBefore = getRoutine();
   state.settings = {
@@ -2529,6 +2541,11 @@ function applyCoachSettings(daysPerWeek, split) {
   if (splitChanged && currentPage === "workout") {
     stopSessionTimer();
     loadTemplate(state.nextWorkout);
+    showToast(`Split changed — up next: ${state.nextWorkout}`, "success");
+  }
+
+  if (splitChanged && currentPage === "quicklog") {
+    qlLoadDay(state.nextWorkout);
     showToast(`Split changed — up next: ${state.nextWorkout}`, "success");
   }
 }
@@ -2588,9 +2605,7 @@ function renderCoachPanel() {
     .map(n => `<option value="${n}" ${n === settings.daysPerWeek ? "selected" : ""}>${n} days / week</option>`)
     .join("");
 
-  const splitOptions = Object.entries(SPLITS)
-    .map(([key, s]) => `<option value="${key}" ${key === settings.split ? "selected" : ""}>${s.label} (${s.frequency})</option>`)
-    .join("");
+  const splitOptions = buildSplitOptionsHTML(settings.split);
 
   const volumeBars = activeMuscleTargets(muscleSets).map(([key, target]) => {
     const sets = muscleSets[key] || 0;
@@ -3397,6 +3412,7 @@ function qlBuildEntry(name, sets, reps, startWeight = "") {
     weight,
     reps,
     setReps: Array.from({ length: Math.max(1, sets) }, () => reps),
+    setWeights: Array.from({ length: Math.max(1, sets) }, () => weight),
     skipped: false,
     lastLabel: last
       ? `${last.weight} lb × ${last.sets.map(s => s.reps).join(" / ")}`
@@ -3424,10 +3440,26 @@ function qlLoadDay(day) {
 }
 
 function renderQuickLog() {
+  renderQuickLogSplitBar();
   renderQuickLogChips();
   renderQuickLogList();
   renderQuickLogAdd();
   renderQuickLogDone();
+}
+
+function renderQuickLogSplitBar() {
+  const wrap = document.getElementById("qlSplitBar");
+  if (!wrap) return;
+
+  const settings = state.settings || { ...SETTINGS_DEFAULT };
+  wrap.innerHTML = `
+    <label for="qlSplitSelect">Split</label>
+    <select id="qlSplitSelect">${buildSplitOptionsHTML(settings.split)}</select>
+  `;
+
+  document.getElementById("qlSplitSelect").onchange = (e) => {
+    applyCoachSettings(settings.daysPerWeek, e.target.value);
+  };
 }
 
 function renderQuickLogChips() {
@@ -3452,10 +3484,17 @@ function qlBuildCard(entry, index) {
   const chips = entry.setReps.map((reps, setIndex) => `
     <div class="ql-set-chip${reps > 0 ? "" : " off"}">
       <span class="ql-set-label">Set ${setIndex + 1}</span>
-      <div class="ql-set-stepper">
-        <button class="ql-step mini" data-act="set-rep-down" data-set="${setIndex}" type="button">−</button>
-        <strong class="ql-set-value">${reps > 0 ? reps : "✕"}</strong>
-        <button class="ql-step mini" data-act="set-rep-up" data-set="${setIndex}" type="button">＋</button>
+      <div class="ql-set-rows">
+        <div class="ql-set-stepper">
+          <button class="ql-step mini" data-act="set-wt-down" data-set="${setIndex}" type="button">−</button>
+          <strong class="ql-set-value">${entry.setWeights[setIndex]}<span class="ql-set-unit">lb</span></strong>
+          <button class="ql-step mini" data-act="set-wt-up" data-set="${setIndex}" type="button">＋</button>
+        </div>
+        <div class="ql-set-stepper">
+          <button class="ql-step mini" data-act="set-rep-down" data-set="${setIndex}" type="button">−</button>
+          <strong class="ql-set-value">${reps > 0 ? reps : "✕"}</strong>
+          <button class="ql-step mini" data-act="set-rep-up" data-set="${setIndex}" type="button">＋</button>
+        </div>
       </div>
     </div>
   `).join("");
@@ -3507,6 +3546,7 @@ function qlBuildCard(entry, index) {
   weightInput.onchange = () => {
     const parsed = parseFloat(weightInput.value);
     entry.weight = Number.isFinite(parsed) ? Math.max(0, parsed) : "";
+    entry.setWeights = entry.setWeights.map(() => entry.weight);
     renderQuickLogList();
   };
 
@@ -3522,8 +3562,14 @@ function qlBuildCard(entry, index) {
 
   const step = qlWeightStep(entry.name);
   const actions = {
-    "wt-down": () => { entry.weight = Math.max(0, parseNum(entry.weight) - step); },
-    "wt-up": () => { entry.weight = parseNum(entry.weight) + step; },
+    "wt-down": () => {
+      entry.weight = Math.max(0, parseNum(entry.weight) - step);
+      entry.setWeights = entry.setWeights.map(() => entry.weight);
+    },
+    "wt-up": () => {
+      entry.weight = parseNum(entry.weight) + step;
+      entry.setWeights = entry.setWeights.map(() => entry.weight);
+    },
     "rep-down": () => {
       entry.reps = Math.max(1, entry.reps - 1);
       entry.setReps = entry.setReps.map(() => entry.reps);
@@ -3532,10 +3578,22 @@ function qlBuildCard(entry, index) {
       entry.reps = Math.min(50, entry.reps + 1);
       entry.setReps = entry.setReps.map(() => entry.reps);
     },
-    "set-down": () => { if (entry.setReps.length > 1) entry.setReps.pop(); },
-    "set-up": () => { if (entry.setReps.length < 8) entry.setReps.push(entry.reps); },
+    "set-down": () => {
+      if (entry.setReps.length > 1) {
+        entry.setReps.pop();
+        entry.setWeights.pop();
+      }
+    },
+    "set-up": () => {
+      if (entry.setReps.length < 8) {
+        entry.setReps.push(entry.reps);
+        entry.setWeights.push(entry.weight);
+      }
+    },
     "set-rep-down": (i) => { entry.setReps[i] = Math.max(0, entry.setReps[i] - 1); },
-    "set-rep-up": (i) => { entry.setReps[i] = Math.min(50, entry.setReps[i] + 1); }
+    "set-rep-up": (i) => { entry.setReps[i] = Math.min(50, entry.setReps[i] + 1); },
+    "set-wt-down": (i) => { entry.setWeights[i] = Math.max(0, entry.setWeights[i] - step); },
+    "set-wt-up": (i) => { entry.setWeights[i] = entry.setWeights[i] + step; }
   };
 
   card.querySelectorAll(".ql-step").forEach(btn => {
@@ -3639,10 +3697,10 @@ function qlCompleteWorkout() {
 
   qlEntries.forEach(entry => {
     if (entry.skipped || entry.weight === "") return;
-    const weight = String(entry.weight);
     const sets = entry.setReps
-      .filter(reps => reps > 0)
-      .map(reps => ({ weight, reps: String(reps) }));
+      .map((reps, i) => ({ weight: entry.setWeights[i], reps }))
+      .filter(s => s.reps > 0)
+      .map(s => ({ weight: String(s.weight), reps: String(s.reps) }));
     if (sets.length) workout.exercises.push({ name: entry.name, sets });
   });
 

@@ -412,6 +412,56 @@ const EXERCISE_RULES = {
   "Russian Twist": 0
 };
 
+// How a movement is loaded and counted. Anything not listed here uses the
+// defaults: the logged weight is the whole load, and the second field is reps.
+//   pair       → the logged weight is ONE implement of a matched pair (a
+//                dumbbell in each hand), so the load actually moved is 2x
+//   perSide    → the logged reps cover ONE side and the set is repeated per
+//                limb, so total working reps are 2x. Est 1RM still uses the
+//                per-side rep count — you did 10 per leg, not 20 in a row.
+//   bodyweight → no external load required. The weight field becomes optional
+//                "added weight" and a blank set is still a real, saveable set.
+//   unit       → "seconds" means the reps field holds a hold duration, which
+//                is never fed to the 1RM estimator.
+// Deliberately NOT marked pair, because the intended entry is ambiguous and
+// guessing wrong would silently double the logged volume: Dumbbell Tricep
+// Extension, Iso Shoulder Press, Outside Curl, Stein Curl, Eccentric Curl.
+const EXERCISE_MECHANICS = {
+  // Matched-pair dumbbell work — log the weight of one bell
+  "Dumbbell Chest Press": { pair: true },
+  "Dumbbell Shoulder Press": { pair: true },
+  "Dumbbell Lateral Raise": { pair: true },
+  "Dumbbell Curl": { pair: true },
+  "Incline Dumbbell Curl": { pair: true },
+  "Hammer Curl": { pair: true },
+  "Arnold Press": { pair: true },
+  "Prone Y Raise": { pair: true },
+
+  // Pair of bells AND one leg at a time — log reps for a single leg
+  "Walking Lunges": { pair: true, perSide: true },
+  "Bulgarian Split Squat": { pair: true, perSide: true },
+
+  // Timed isometric holds — the "reps" field is seconds
+  "Plank": { bodyweight: true, unit: "seconds" },
+  "Wall Sit": { bodyweight: true, unit: "seconds" },
+
+  // Unloaded movements — weight optional, blank still counts as a real set
+  "Pullups": { bodyweight: true },
+  "Dips": { bodyweight: true },
+  "Pushups": { bodyweight: true },
+  "Crunch": { bodyweight: true },
+  "Bicycle Crunch": { bodyweight: true },
+  "Russian Twist": { bodyweight: true },
+  "Chin Tuck": { bodyweight: true },
+  "Band Pull-Apart": { bodyweight: true },
+  "Wall Slide": { bodyweight: true },
+  "Thoracic Extension (Foam Roller)": { bodyweight: true },
+  "Shoulder Complex": { bodyweight: true },
+  "Forearm Complex": { bodyweight: true }
+};
+
+const DEFAULT_MECHANICS = {};
+
 const EXERCISE_MUSCLES = {
   "Barbell Bench Press": ["chest"],
   "Incline Barbell Press": ["chest"],
@@ -764,6 +814,61 @@ function namesMatch(a, b) {
   return shorter.split(" ").length >= 2 && longer.includes(shorter);
 }
 
+// ==============================
+// EXERCISE MECHANICS
+// ==============================
+
+function mechanicsFor(name) {
+  if (EXERCISE_MECHANICS[name]) return EXERCISE_MECHANICS[name];
+  const match = Object.keys(EXERCISE_MECHANICS).find(key => namesMatch(key, name));
+  return match ? EXERCISE_MECHANICS[match] : DEFAULT_MECHANICS;
+}
+
+function isBodyweight(name) {
+  return !!mechanicsFor(name).bodyweight;
+}
+
+function isTimed(name) {
+  return mechanicsFor(name).unit === "seconds";
+}
+
+// A matched pair of implements means the load moved is double what you log
+function loadFactor(name) {
+  return mechanicsFor(name).pair ? 2 : 1;
+}
+
+// Per-side reps mean the set is performed twice, so working volume is double
+function repFactor(name) {
+  return mechanicsFor(name).perSide ? 2 : 1;
+}
+
+function repUnit(name, count) {
+  if (isTimed(name)) return "sec";
+  return count === 1 ? "rep" : "reps";
+}
+
+// Short, plain-language note explaining what the inputs on this card mean
+function mechanicsNote(name) {
+  const m = mechanicsFor(name);
+  const parts = [];
+  if (m.pair) parts.push("Log one dumbbell — counted as double");
+  if (m.perSide) parts.push("Reps are per side");
+  if (m.unit === "seconds") parts.push("Enter seconds held");
+  else if (m.bodyweight) parts.push("Bodyweight — added weight optional");
+  return parts.join(" · ");
+}
+
+// Formats a logged weight for display, revealing the effective load when the
+// two differ so the doubling is never silently applied behind the user's back
+function formatLoggedWeight(name, weight) {
+  const w = parseNum(weight);
+  if (isBodyweight(name) && w <= 0) return "BW";
+  if (w <= 0) return "—";
+  const factor = loadFactor(name);
+  if (factor > 1) return `${formatSuggestedWeight(w)} lb/hand (${formatSuggestedWeight(w * factor)} total)`;
+  return `${formatSuggestedWeight(w)} lb`;
+}
+
 function nextWorkout(day) {
   const routine = getRoutine();
   const i = routine.indexOf(day);
@@ -887,31 +992,13 @@ function est1RM(weight, reps) {
 }
 
 function calcTotalVolume(workouts) {
-  let total = 0;
-  workouts.forEach(workout => {
-    (workout.exercises || []).forEach(ex => {
-      (ex.sets || []).forEach(set => {
-        const w = parseFloat(set.weight);
-        const r = parseFloat(set.reps);
-        if (!isNaN(w) && !isNaN(r) && w > 0 && r > 0) {
-          total += w * r;
-        }
-      });
-    });
-  });
-  return total;
+  return (workouts || []).reduce((total, workout) => total + calcWorkoutVolume(workout), 0);
 }
 
 function calcWorkoutVolume(workout) {
   let total = 0;
   (workout?.exercises || []).forEach(ex => {
-    (ex.sets || []).forEach(set => {
-      const w = parseFloat(set.weight);
-      const r = parseFloat(set.reps);
-      if (!isNaN(w) && !isNaN(r) && w > 0 && r > 0) {
-        total += w * r;
-      }
-    });
+    validSetsOf(ex).forEach(set => { total += set.volume; });
   });
   return total;
 }
@@ -942,8 +1029,8 @@ function bestLiftForNames(workouts, names) {
   workouts.forEach(workout => {
     (workout.exercises || []).forEach(ex => {
       if (!names.some(n => namesMatch(ex.name, n))) return;
-      (ex.sets || []).forEach(set => {
-        best = Math.max(best, est1RM(set.weight, set.reps));
+      validSetsOf(ex).forEach(set => {
+        best = Math.max(best, set.e1rm);
       });
     });
   });
@@ -1563,7 +1650,8 @@ function persistDraftForDay() {
       name: card.querySelector(".edit-select").value,
       sets: parseInt(card.querySelector(".edit-sets").value || "1", 10),
       reps: parseInt(card.querySelector(".edit-reps").value || "1", 10),
-      startWeight: card.querySelector(".preset-weight").value || "",
+      // Bodyweight cards render no preset field
+      startWeight: card.querySelector(".preset-weight")?.value || "",
       collapsed: card.querySelector(".exercise-body").classList.contains("hidden"),
       entries: [...card.querySelectorAll(".setRow")].map(row => ({
         weight: row.querySelector(".weight").value || "",
@@ -1771,32 +1859,117 @@ function toggleRestVisibility() {
 // PERFORMANCE / SUGGESTIONS
 // ==============================
 
-function findLastPerformance(exerciseName) {
-  for (const workout of state.workouts) {
-    for (const ex of (workout.exercises || [])) {
-      if (!namesMatch(ex.name, exerciseName)) continue;
-      if (!Array.isArray(ex.sets) || !ex.sets.length) continue;
-      const validSets = ex.sets.filter(set => set.weight && set.reps);
-      if (!validSets.length) continue;
-
-      const weight = parseFloat(validSets[0].weight);
-      const reps = validSets.map(set => parseFloat(set.reps)).filter(Number.isFinite);
-      const avgReps = reps.length ? reps.reduce((sum, rep) => sum + rep, 0) / reps.length : 0;
-
-      return {
-        weight: validSets[0].weight,
-        reps: validSets[0].reps,
-        avgReps,
-        setCount: validSets.length,
-        sets: validSets,
-        numericWeight: Number.isFinite(weight) ? weight : 0
-      };
-    }
+// Which occurrence of its own name an entry is within a day's layout. A program
+// that runs the same lift twice (heavy 5x5 then a back-off 3x8) needs each slot
+// to track its own history instead of both reading the heavy set.
+function slotIndexIn(list, index, nameKey = "name") {
+  const target = list?.[index]?.[nameKey];
+  if (!target) return 0;
+  let slot = 0;
+  for (let i = 0; i < index; i++) {
+    if (namesMatch(list[i]?.[nameKey], target)) slot++;
   }
-  return null;
+  return slot;
 }
 
-function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetReps = 8, recovery = null) {
+// Finds the Nth occurrence of a lift inside one saved workout. Falls back to
+// the last occurrence when that session ran the lift fewer times than today's.
+function matchInWorkout(workout, exerciseName, slot) {
+  const matches = [];
+  (workout?.exercises || []).forEach(ex => {
+    if (!namesMatch(ex.name, exerciseName)) return;
+    const sets = validSetsOf(ex);
+    if (sets.length) matches.push(sets);
+  });
+  if (!matches.length) return null;
+  return matches[Math.min(slot, matches.length - 1)];
+}
+
+// Prefers history from the same training day, so a heavy Monday bench is
+// compared against the last heavy Monday and not against Friday's back-off
+// work. Widens to the day group (Push A ↔ Push B), then to any day, so a
+// brand-new day still gets a sensible starting point.
+function findLastPerformance(exerciseName, options = {}) {
+  const slot = Math.max(0, options.slot || 0);
+  const day = options.day || null;
+  const workouts = state.workouts || [];
+
+  const scan = (predicate, scope) => {
+    for (const workout of workouts) {
+      if (!predicate(workout)) continue;
+      const sets = matchInWorkout(workout, exerciseName, slot);
+      if (!sets) continue;
+
+      const reps = sets.map(set => set.reps);
+      return {
+        weight: sets[0].weight,
+        reps: sets[0].reps,
+        avgReps: reps.reduce((sum, rep) => sum + rep, 0) / reps.length,
+        setCount: sets.length,
+        sets,
+        numericWeight: sets[0].weight,
+        sourceDay: workout.name || "",
+        sourceDate: workout.date || "",
+        scope
+      };
+    }
+    return null;
+  };
+
+  if (!day) return scan(() => true, "any");
+
+  const group = dayGroup(day);
+  return scan(w => w.name === day, "day")
+    || scan(w => dayGroup(w.name) === group, "group")
+    || scan(() => true, "any");
+}
+
+// Every session of one slot on one day, newest first — the series progression
+// and plateau detection should reason over.
+function slotSessions(exerciseName, options = {}) {
+  const slot = Math.max(0, options.slot || 0);
+  const day = options.day || null;
+  const out = [];
+
+  (state.workouts || []).forEach(workout => {
+    if (day && workout.name !== day) return;
+    const sets = matchInWorkout(workout, exerciseName, slot);
+    if (!sets) return;
+    out.push({
+      date: workout.date || "",
+      topWeight: Math.max(...sets.map(s => s.weight)),
+      best1RM: Math.max(...sets.map(s => s.e1rm))
+    });
+  });
+
+  return out;
+}
+
+// One-line summary of the session a suggestion is based on, naming the day it
+// came from whenever that is not the day being logged.
+function describeLastPerformance(last, exerciseName) {
+  if (!last) return "";
+  const load = formatLoggedWeight(exerciseName, last.weight);
+  const reps = `${last.reps} ${repUnit(exerciseName, last.reps)}`;
+  const where = last.scope === "day"
+    ? "Last time"
+    : `Last logged on ${last.sourceDay || "another day"}`;
+  const when = last.sourceDate ? ` (${last.sourceDate})` : "";
+  return `${where}${when}: ${load} × ${reps} over ${last.setCount} set${last.setCount === 1 ? "" : "s"}`;
+}
+
+function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetReps = 8, recovery = null, options = {}) {
+  if (isBodyweight(exerciseName)) {
+    const unit = isTimed(exerciseName) ? "seconds" : "reps";
+    const lastReps = lastPerformance ? Math.max(...lastPerformance.sets.map(s => s.reps)) : 0;
+    return {
+      value: "",
+      reason: lastReps > 0
+        ? `Bodyweight movement — no load to pick. Best set last time was ${lastReps} ${unit}; beat it by one.`
+        : `Bodyweight movement — log ${unit} and leave weight blank unless you add load.`
+    };
+  }
+
   if (!lastPerformance) {
     return {
       value: String(startWeight || ""),
@@ -1833,10 +2006,12 @@ function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetRe
     };
   }
 
-  // 3-session plateau at the same top weight → deload and rebuild
-  const stats = calcExerciseStats(exerciseName);
-  if (stats && stats.sessions.length >= 3) {
-    const [a, b, c] = stats.sessions; // newest first
+  // 3-session plateau at the same top weight → deload and rebuild. Scoped to
+  // this slot on this day: a heavy session and a back-off session sitting at
+  // different loads are not a plateau, and comparing them was reading as one.
+  const sessions = slotSessions(exerciseName, options);
+  if (sessions.length >= 3) {
+    const [a, b, c] = sessions; // newest first
     if (a.topWeight === b.topWeight && b.topWeight === c.topWeight && a.best1RM <= c.best1RM + 0.1) {
       const deload = roundToIncrement(weight * 0.9, jump);
       if (deload > 0 && deload < weight) {
@@ -1881,10 +2056,35 @@ function suggestWeight(exerciseName, lastPerformance, startWeight = "", targetRe
 // TRAINING INTELLIGENCE
 // ==============================
 
+// The one place set math happens. Returns, per set:
+//   weight → exactly what the user typed (for display)
+//   load   → what was actually moved, after the matched-pair doubling
+//   volume → load × reps, after the per-side rep doubling
+//   e1rm   → estimated 1RM, always 0 for timed holds and unloaded sets
+// A bodyweight movement stays valid with no weight entered; everything else
+// still needs a real load to count.
 function validSetsOf(ex) {
+  const name = ex?.name || "";
+  const bodyweight = isBodyweight(name);
+  const timed = isTimed(name);
+  const lf = loadFactor(name);
+  const rf = repFactor(name);
+
   return (ex?.sets || [])
-    .map(set => ({ weight: parseFloat(set.weight), reps: parseFloat(set.reps) }))
-    .filter(set => Number.isFinite(set.weight) && Number.isFinite(set.reps) && set.weight > 0 && set.reps > 0);
+    .map(set => {
+      const parsedWeight = parseFloat(set.weight);
+      const weight = Number.isFinite(parsedWeight) && parsedWeight > 0 ? parsedWeight : 0;
+      const reps = parseFloat(set.reps);
+      const load = weight * lf;
+      return {
+        weight,
+        reps,
+        load,
+        volume: load * reps * rf,
+        e1rm: timed ? 0 : est1RM(load, reps)
+      };
+    })
+    .filter(set => Number.isFinite(set.reps) && set.reps > 0 && (bodyweight || set.weight > 0));
 }
 
 function calcRecoveryData(workouts = state.workouts || []) {
@@ -2022,10 +2222,9 @@ function calcExerciseStats(exerciseName, workouts = state.workouts || []) {
       let repCount = 0;
 
       sets.forEach(set => {
-        const e = est1RM(set.weight, set.reps);
-        if (e > best.value) best = { value: e, weight: set.weight, reps: set.reps };
+        if (set.e1rm > best.value) best = { value: set.e1rm, weight: set.weight, reps: set.reps };
         topWeight = Math.max(topWeight, set.weight);
-        volume += set.weight * set.reps;
+        volume += set.volume;
         repCount += set.reps;
       });
 
@@ -2057,8 +2256,7 @@ function calcExerciseStats(exerciseName, workouts = state.workouts || []) {
     totalSets += session.setCount;
     totalReps += session.repCount;
     session.sets.forEach(set => {
-      const e = est1RM(set.weight, set.reps);
-      if (e > best1RM.value) best1RM = { value: e, weight: set.weight, reps: set.reps, date: session.date };
+      if (set.e1rm > best1RM.value) best1RM = { value: set.e1rm, weight: set.weight, reps: set.reps, date: session.date };
       if (set.weight > heaviest.weight || (set.weight === heaviest.weight && set.reps > heaviest.reps)) {
         heaviest = { weight: set.weight, reps: set.reps, date: session.date };
       }
@@ -2110,13 +2308,15 @@ function detectPRs(workout, priorWorkouts) {
 
     let prior1RM = 0;
     let priorHeaviest = 0;
+    let priorSetCount = 0;
     const priorRepsAtWeight = {};
 
     priorWorkouts.forEach(w => {
       (w.exercises || []).forEach(pe => {
         if (!namesMatch(pe.name, ex.name)) return;
         validSetsOf(pe).forEach(set => {
-          prior1RM = Math.max(prior1RM, est1RM(set.weight, set.reps));
+          priorSetCount++;
+          prior1RM = Math.max(prior1RM, set.e1rm);
           priorHeaviest = Math.max(priorHeaviest, set.weight);
           const key = String(set.weight);
           priorRepsAtWeight[key] = Math.max(priorRepsAtWeight[key] || 0, set.reps);
@@ -2124,16 +2324,19 @@ function detectPRs(workout, priorWorkouts) {
       });
     });
 
-    if (!prior1RM) return; // first log of a movement sets the baseline, not a PR
+    // First log of a movement sets the baseline, not a PR. Keyed off prior set
+    // count rather than prior 1RM so unloaded work (pullups, planks) can still
+    // earn rep and duration records.
+    if (!priorSetCount) return;
 
     let new1RM = 0;
     let newHeaviest = 0;
     sets.forEach(set => {
-      new1RM = Math.max(new1RM, est1RM(set.weight, set.reps));
+      new1RM = Math.max(new1RM, set.e1rm);
       newHeaviest = Math.max(newHeaviest, set.weight);
     });
 
-    if (new1RM > prior1RM + 0.1) {
+    if (prior1RM > 0 && new1RM > prior1RM + 0.1) {
       prs.push({
         type: "1rm",
         label: `${ex.name} · Est 1RM`,
@@ -2145,7 +2348,7 @@ function detectPRs(workout, priorWorkouts) {
       prs.push({
         type: "weight",
         label: `${ex.name} · Heaviest Weight`,
-        detail: `${newHeaviest} lb (was ${priorHeaviest})`
+        detail: `${formatLoggedWeight(ex.name, newHeaviest)} (was ${formatLoggedWeight(ex.name, priorHeaviest)})`
       });
     }
 
@@ -2160,10 +2363,11 @@ function detectPRs(workout, priorWorkouts) {
       }
     });
     if (bestRepPR) {
+      const timed = isTimed(ex.name);
       prs.push({
-        type: "reps",
-        label: `${ex.name} · Rep Record`,
-        detail: `${bestRepPR.reps} reps at ${bestRepPR.weight} lb (was ${bestRepPR.prior})`
+        type: timed ? "duration" : "reps",
+        label: `${ex.name} · ${timed ? "Longest Hold" : "Rep Record"}`,
+        detail: `${bestRepPR.reps} ${repUnit(ex.name, bestRepPR.reps)} at ${formatLoggedWeight(ex.name, bestRepPR.weight)} (was ${bestRepPR.prior})`
       });
     }
   });
@@ -2321,26 +2525,42 @@ function collapseAll() {
 function rebuildSetRows(body, count, suggested, entryValues = [], exerciseName = "") {
   body.querySelectorAll(".setRow").forEach(row => row.remove());
 
+  const bodyweight = isBodyweight(exerciseName);
+  const timed = isTimed(exerciseName);
+  const repsPlaceholder = timed ? "seconds" : "reps";
+
   for (let i = 0; i < count; i++) {
     const entry = entryValues[i] || {};
     const row = document.createElement("div");
     row.className = "setRow";
     row.dataset.index = String(i);
+
+    // Bodyweight movements save fine with the weight left blank, so the field
+    // is labelled as optional added load rather than a required input.
+    const weightPlaceholder = bodyweight
+      ? "+ lb (optional)"
+      : (i === 0 ? (suggested || "weight") : "set 1 drives suggestion");
+    const weightValue = entry.weight ?? (!bodyweight && i === 0 ? (suggested ?? "") : "");
+
+    const hint = bodyweight
+      ? `<div class="set-suggestion"><strong>${timed ? "Hold for time" : "Bodyweight"}</strong><span>${timed ? "Log seconds held. Weight is optional." : "Log reps. Add weight only if you loaded the movement."}</span></div>`
+      : `<div class="set-suggestion${i === 0 && suggested ? " ready" : ""}"><strong>${i === 0 ? `Open with ${escapeHtml(suggested || "your working weight")}` : "Enter set 1 weight"}</strong><span>${i === 0 ? "Use your target working load as the baseline." : "Suggestions for later sets will update automatically."}</span></div>`;
+
     row.innerHTML = `
       <div class="set-label">
         <span>Set ${i + 1}</span>
         <small>${i === 0 ? "Baseline" : "Follow-up"}</small>
       </div>
-      <input class="weight" placeholder="${escapeHtml(i === 0 ? (suggested || "weight") : "set 1 drives suggestion")}" value="${escapeHtml(entry.weight ?? (i === 0 ? (suggested ?? "") : ""))}">
-      <input class="reps" placeholder="reps" value="${escapeHtml(entry.reps ?? "")}">
-      <div class="set-suggestion${i === 0 && suggested ? " ready" : ""}"><strong>${i === 0 ? `Open with ${suggested || "your working weight"}` : "Enter set 1 weight"}</strong><span>${i === 0 ? "Use your target working load as the baseline." : "Suggestions for later sets will update automatically."}</span></div>
+      <input class="weight" placeholder="${escapeHtml(weightPlaceholder)}" value="${escapeHtml(weightValue)}">
+      <input class="reps" placeholder="${escapeHtml(repsPlaceholder)}" value="${escapeHtml(entry.reps ?? "")}">
+      ${hint}
       <button class="ghost rest-btn" type="button">Rest</button>
     `;
     row.querySelector(".rest-btn").onclick = () => startRestTimer(90);
     body.appendChild(row);
   }
 
-  wireSetSuggestionInputs(body, exerciseName, suggested);
+  if (!bodyweight) wireSetSuggestionInputs(body, exerciseName, suggested);
 }
 
 function updateSetSuggestionUI(body, exerciseName, fallbackSuggested = "") {
@@ -2788,15 +3008,18 @@ function renderCelebrationPanel() {
 
 const analyticsExpanded = new Set();
 
-function buildSuggestionHTML(last, suggested) {
+function buildSuggestionHTML(last, suggested, exerciseName = "") {
   const lines = [];
   if (last) {
-    lines.push(`Last workout: ${last.weight} × ${last.reps} over ${last.setCount} set${last.setCount === 1 ? "" : "s"}`);
-    const best = (last.sets || []).reduce((max, set) => Math.max(max, est1RM(set.weight, set.reps)), 0);
+    lines.push(describeLastPerformance(last, exerciseName));
+    const best = (last.sets || []).reduce((max, set) => Math.max(max, set.e1rm), 0);
     if (best > 0) lines.push(`Est 1RM: ${Math.round(best)} lb`);
   }
+  const headline = isBodyweight(exerciseName)
+    ? "Bodyweight"
+    : `Suggested: ${suggested.value || "—"}`;
   return `
-    <strong>Suggested: ${escapeHtml(suggested.value || "—")}</strong>
+    <strong>${escapeHtml(headline)}</strong>
     ${lines.map(line => `<small class="suggest-line">${escapeHtml(line)}</small>`).join("")}
     <small>${escapeHtml(suggested.reason)}</small>
   `;
@@ -2975,18 +3198,21 @@ function renderWorkout(draft = null) {
   exercises.forEach((ex, exIndex) => {
     const draftEx = draftExercises[exIndex] || null;
     const options = getDayOptions(selectedDay, ex.name);
-    const last = findLastPerformance(ex.name);
-    const suggested = suggestWeight(ex.name, last, ex.startWeight || "", ex.reps || 8, recovery);
+    const lookup = { day: selectedDay, slot: slotIndexIn(exercises, exIndex) };
+    const last = findLastPerformance(ex.name, lookup);
+    const suggested = suggestWeight(ex.name, last, ex.startWeight || "", ex.reps || 8, recovery, lookup);
 
     const card = document.createElement("div");
     card.className = "exercise-card";
 
     const head = document.createElement("div");
     head.className = "exercise-head";
+    const note = mechanicsNote(ex.name);
     head.innerHTML = `
       <div>
-        <h3>${ex.name}</h3>
-        <div class="exercise-meta">${last ? `Last: ${last.weight} x ${last.reps} · avg ${last.avgReps.toFixed(1)} over ${last.setCount} set${last.setCount === 1 ? "" : "s"}` : "No previous log"}</div>
+        <h3>${escapeHtml(ex.name)}</h3>
+        <div class="exercise-meta">${last ? escapeHtml(describeLastPerformance(last, ex.name)) : "No previous log"}</div>
+        ${note ? `<div class="exercise-mechanics">${escapeHtml(note)}</div>` : ""}
       </div>
       <div>${ex.collapsed ? "►" : "▼"}</div>
     `;
@@ -3009,7 +3235,7 @@ function renderWorkout(draft = null) {
         <input class="edit-sets" type="number" min="1" value="${ex.sets}">
       </div>
       <div>
-        <label>Target Reps</label>
+        <label>${isTimed(ex.name) ? "Target Seconds" : "Target Reps"}</label>
         <input class="edit-reps" type="number" min="1" value="${ex.reps}">
       </div>
       <button class="ghost" type="button">↑ Up</button>
@@ -3019,13 +3245,16 @@ function renderWorkout(draft = null) {
 
 const presetRow = document.createElement("div");
 presetRow.className = "preset-row";
+// A fallback load is meaningless on an unloaded movement, so the preset field
+// is dropped there rather than inviting a weight that would never be used.
 presetRow.innerHTML = `
+  ${isBodyweight(ex.name) ? "" : `
   <div>
     <label>Preset / fallback weight</label>
     <input class="preset-weight" value="${escapeHtml(ex.startWeight || "")}" placeholder="135">
   </div>
-  <button class="ghost" type="button">Use Preset</button>
-  <div class="exercise-suggest">${buildSuggestionHTML(last, suggested)}</div>
+  <button class="ghost" type="button">Use Preset</button>`}
+  <div class="exercise-suggest">${buildSuggestionHTML(last, suggested, ex.name)}</div>
 `;
 
 const demoRow = document.createElement("div");
@@ -3096,10 +3325,10 @@ const warmupBtn = demoRow.querySelector(".warmup-btn");
     setsInput.oninput = () => {
       exercises[exIndex].sets = Math.max(1, parseInt(setsInput.value || "1", 10));
       persistCurrentLayout();
-      const livePerf = findLastPerformance(ex.name);
-      const liveSuggested = suggestWeight(ex.name, livePerf, exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8, recovery);
+      const livePerf = findLastPerformance(ex.name, lookup);
+      const liveSuggested = suggestWeight(ex.name, livePerf, exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8, recovery, lookup);
       rebuildSetRows(body, exercises[exIndex].sets, liveSuggested.value, [], ex.name);
-      suggestText.innerHTML = buildSuggestionHTML(livePerf, liveSuggested);
+      suggestText.innerHTML = buildSuggestionHTML(livePerf, liveSuggested, ex.name);
       renderTrackerProgress();
       persistDraftForDay();
     };
@@ -3107,10 +3336,10 @@ const warmupBtn = demoRow.querySelector(".warmup-btn");
     repsInput.oninput = () => {
       exercises[exIndex].reps = Math.max(1, parseInt(repsInput.value || "1", 10));
       persistCurrentLayout();
-      const livePerf = findLastPerformance(ex.name);
-      const liveSuggested = suggestWeight(ex.name, livePerf, exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8, recovery);
+      const livePerf = findLastPerformance(ex.name, lookup);
+      const liveSuggested = suggestWeight(ex.name, livePerf, exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8, recovery, lookup);
       rebuildSetRows(body, exercises[exIndex].sets, liveSuggested.value, [], ex.name);
-      suggestText.innerHTML = buildSuggestionHTML(livePerf, liveSuggested);
+      suggestText.innerHTML = buildSuggestionHTML(livePerf, liveSuggested, ex.name);
       renderTrackerProgress();
       persistDraftForDay();
     };
@@ -3119,18 +3348,23 @@ const warmupBtn = demoRow.querySelector(".warmup-btn");
     moveDownBtn.onclick = () => moveExercise(exIndex, 1);
     removeBtn.onclick = () => removeExercise(exIndex);
 
-    presetInput.oninput = () => {
-      exercises[exIndex].startWeight = presetInput.value.trim();
-      const livePerf = findLastPerformance(ex.name);
-      const liveSuggested = suggestWeight(ex.name, livePerf, exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8, recovery);
-      suggestText.innerHTML = buildSuggestionHTML(livePerf, liveSuggested);
-      persistCurrentLayout();
-      persistDraftForDay();
-    };
+    // Both are absent on bodyweight cards, where there is no preset to set
+    if (presetInput) {
+      presetInput.oninput = () => {
+        exercises[exIndex].startWeight = presetInput.value.trim();
+        const livePerf = findLastPerformance(ex.name, lookup);
+        const liveSuggested = suggestWeight(ex.name, livePerf, exercises[exIndex].startWeight || "", exercises[exIndex].reps || 8, recovery, lookup);
+        suggestText.innerHTML = buildSuggestionHTML(livePerf, liveSuggested, ex.name);
+        persistCurrentLayout();
+        persistDraftForDay();
+      };
+    }
 
-    usePresetBtn.onclick = () => {
-      applyPresetToRows(body, presetInput.value.trim(), selectInput.value || ex.name);
-    };
+    if (usePresetBtn) {
+      usePresetBtn.onclick = () => {
+        applyPresetToRows(body, presetInput.value.trim(), selectInput.value || ex.name);
+      };
+    }
 demoBtn.onclick = () => {
   openExerciseDemo(selectInput.value || ex.name);
 };
@@ -3139,7 +3373,8 @@ warmupBtn.onclick = () => {
   if (!nowHidden) {
     const baseline = body.querySelector(".setRow .weight")?.value.trim()
       || suggested.value
-      || presetInput.value.trim();
+      || presetInput?.value.trim()
+      || "";
     warmupBox.innerHTML = buildWarmupHTML(selectInput.value || ex.name, baseline);
   }
   warmupBtn.textContent = nowHidden ? "🔥 Warm-up" : "Hide Warm-up";
@@ -3208,12 +3443,17 @@ function completeWorkout() {
 
   document.querySelectorAll(".exercise-card").forEach(card => {
     const name = card.querySelector(".edit-select").value;
+    const bodyweight = isBodyweight(name);
     const sets = [];
 
     card.querySelectorAll(".setRow").forEach(row => {
       const weight = row.querySelector(".weight").value.trim();
       const reps = row.querySelector(".reps").value.trim();
-      if (weight && reps) sets.push({ weight, reps });
+      // Unloaded work is a real set. Requiring a weight here is what used to
+      // make planks and crunches vanish silently on save.
+      if (!reps) return;
+      if (!bodyweight && !weight) return;
+      sets.push({ weight, reps });
     });
 
     workout.exercises.push({ name, sets });
@@ -3399,13 +3639,15 @@ function qlWeightStep(name) {
   return jump && jump > 0 ? jump : 5;
 }
 
-function qlBuildEntry(name, sets, reps, startWeight = "") {
-  const last = findLastPerformance(name);
-  const suggestion = suggestWeight(name, last, startWeight, reps);
+function qlBuildEntry(name, sets, reps, startWeight = "", options = {}) {
+  const last = findLastPerformance(name, options);
+  const suggestion = suggestWeight(name, last, startWeight, reps, null, options);
   const suggested = parseFloat(suggestion.value);
-  const weight = Number.isFinite(suggested)
-    ? suggested
-    : (EXERCISE_RULES[name] === 0 ? 0 : "");
+  // Bodyweight movements carry no load at all — an implicit 0 used to be saved
+  // as a real weight and then filtered back out of every analytic downstream.
+  const weight = isBodyweight(name)
+    ? ""
+    : (Number.isFinite(suggested) ? suggested : "");
 
   return {
     name,
@@ -3415,16 +3657,32 @@ function qlBuildEntry(name, sets, reps, startWeight = "") {
     setWeights: Array.from({ length: Math.max(1, sets) }, () => weight),
     skipped: false,
     lastLabel: last
-      ? `${last.weight} lb × ${last.sets.map(s => s.reps).join(" / ")}`
+      ? `${formatLoggedWeight(name, last.weight)} × ${last.sets.map(s => s.reps).join(" / ")}${last.scope === "day" ? "" : ` · ${last.sourceDay}`}`
       : ""
   };
+}
+
+// Slot of an entry among same-named entries already in the Quick Log list
+function qlSlotFor(name, upToIndex = qlEntries.length) {
+  let slot = 0;
+  for (let i = 0; i < upToIndex && i < qlEntries.length; i++) {
+    if (namesMatch(qlEntries[i].name, name)) slot++;
+  }
+  return slot;
 }
 
 function qlLoadDay(day) {
   qlDay = day;
   qlSaved = null;
   const draft = getQlDraft(day);
-  qlEntries = draft ? draft.entries : getLayoutForDay(day).map(t => qlBuildEntry(t.name, t.sets, t.reps, t.startWeight));
+  if (draft) {
+    qlEntries = draft.entries;
+  } else {
+    const layout = getLayoutForDay(day);
+    qlEntries = layout.map((t, i) =>
+      qlBuildEntry(t.name, t.sets, t.reps, t.startWeight, { day, slot: slotIndexIn(layout, i) })
+    );
+  }
 
   const dateEl = document.getElementById("qlDate");
   if (dateEl) dateEl.value = draft?.date || todayString();
@@ -3481,18 +3739,28 @@ function qlBuildCard(entry, index) {
   const card = document.createElement("div");
   card.className = `ql-card${entry.skipped ? " skipped" : ""}`;
 
+  const bodyweight = isBodyweight(entry.name);
+  const timed = isTimed(entry.name);
+  const note = mechanicsNote(entry.name);
+  const repLabel = timed ? "Seconds per set" : "Reps per set";
+  const repStep = timed ? 5 : 1;
+  const repMax = timed ? 600 : 50;
+
+  // Unloaded movements get no per-set weight stepper — there is nothing to
+  // step, and the old implicit 0 lb was the source of the odd abs inputs.
   const chips = entry.setReps.map((reps, setIndex) => `
     <div class="ql-set-chip${reps > 0 ? "" : " off"}">
       <span class="ql-set-label">Set ${setIndex + 1}</span>
       <div class="ql-set-rows">
+        ${bodyweight ? "" : `
         <div class="ql-set-stepper">
           <button class="ql-step mini" data-act="set-wt-down" data-set="${setIndex}" type="button">−</button>
           <strong class="ql-set-value">${entry.setWeights[setIndex]}<span class="ql-set-unit">lb</span></strong>
           <button class="ql-step mini" data-act="set-wt-up" data-set="${setIndex}" type="button">＋</button>
-        </div>
+        </div>`}
         <div class="ql-set-stepper">
           <button class="ql-step mini" data-act="set-rep-down" data-set="${setIndex}" type="button">−</button>
-          <strong class="ql-set-value">${reps > 0 ? reps : "✕"}</strong>
+          <strong class="ql-set-value">${reps > 0 ? reps : "✕"}${timed && reps > 0 ? '<span class="ql-set-unit">s</span>' : ""}</strong>
           <button class="ql-step mini" data-act="set-rep-up" data-set="${setIndex}" type="button">＋</button>
         </div>
       </div>
@@ -3504,21 +3772,22 @@ function qlBuildCard(entry, index) {
       <div class="ql-card-title">
         <strong>${escapeHtml(entry.name)}</strong>
         <span class="ql-last">${entry.lastLabel ? `Last: ${escapeHtml(entry.lastLabel)}` : "First log — sets your baseline"}</span>
+        ${note ? `<span class="ql-mechanics">${escapeHtml(note)}</span>` : ""}
       </div>
       <button class="ql-skip" type="button">${entry.skipped ? "Undo" : "Skip"}</button>
     </div>
     <div class="ql-card-body${entry.skipped ? " hidden" : ""}">
       <div class="ql-stepper-row">
         <div class="ql-stepper">
-          <span class="ql-stepper-label">Weight (lb)</span>
+          <span class="ql-stepper-label">${bodyweight ? "Added weight (lb)" : "Weight (lb)"}</span>
           <div class="ql-stepper-controls">
             <button class="ql-step" data-act="wt-down" type="button">−</button>
-            <input class="mono ql-value" data-act="wt" inputmode="decimal" value="${entry.weight === "" ? "" : escapeHtml(String(entry.weight))}" placeholder="0" />
+            <input class="mono ql-value" data-act="wt" inputmode="decimal" value="${entry.weight === "" ? "" : escapeHtml(String(entry.weight))}" placeholder="${bodyweight ? "BW" : "0"}" />
             <button class="ql-step" data-act="wt-up" type="button">＋</button>
           </div>
         </div>
         <div class="ql-stepper">
-          <span class="ql-stepper-label">Reps per set</span>
+          <span class="ql-stepper-label">${escapeHtml(repLabel)}</span>
           <div class="ql-stepper-controls">
             <button class="ql-step" data-act="rep-down" type="button">−</button>
             <input class="mono ql-value" data-act="rep" inputmode="numeric" value="${entry.reps}" />
@@ -3554,7 +3823,7 @@ function qlBuildCard(entry, index) {
   repInput.onchange = () => {
     const parsed = parseInt(repInput.value, 10);
     if (Number.isFinite(parsed)) {
-      entry.reps = Math.min(50, Math.max(1, parsed));
+      entry.reps = Math.min(repMax, Math.max(1, parsed));
       entry.setReps = entry.setReps.map(() => entry.reps);
     }
     renderQuickLogList();
@@ -3563,7 +3832,10 @@ function qlBuildCard(entry, index) {
   const step = qlWeightStep(entry.name);
   const actions = {
     "wt-down": () => {
-      entry.weight = Math.max(0, parseNum(entry.weight) - step);
+      // Stepping a bodyweight movement back to zero clears it rather than
+      // pinning a literal 0 lb onto the saved set
+      const next = parseNum(entry.weight) - step;
+      entry.weight = bodyweight && next <= 0 ? "" : Math.max(0, next);
       entry.setWeights = entry.setWeights.map(() => entry.weight);
     },
     "wt-up": () => {
@@ -3571,11 +3843,11 @@ function qlBuildCard(entry, index) {
       entry.setWeights = entry.setWeights.map(() => entry.weight);
     },
     "rep-down": () => {
-      entry.reps = Math.max(1, entry.reps - 1);
+      entry.reps = Math.max(1, entry.reps - repStep);
       entry.setReps = entry.setReps.map(() => entry.reps);
     },
     "rep-up": () => {
-      entry.reps = Math.min(50, entry.reps + 1);
+      entry.reps = Math.min(repMax, entry.reps + repStep);
       entry.setReps = entry.setReps.map(() => entry.reps);
     },
     "set-down": () => {
@@ -3590,8 +3862,8 @@ function qlBuildCard(entry, index) {
         entry.setWeights.push(entry.weight);
       }
     },
-    "set-rep-down": (i) => { entry.setReps[i] = Math.max(0, entry.setReps[i] - 1); },
-    "set-rep-up": (i) => { entry.setReps[i] = Math.min(50, entry.setReps[i] + 1); },
+    "set-rep-down": (i) => { entry.setReps[i] = Math.max(0, entry.setReps[i] - repStep); },
+    "set-rep-up": (i) => { entry.setReps[i] = Math.min(repMax, entry.setReps[i] + repStep); },
     "set-wt-down": (i) => { entry.setWeights[i] = Math.max(0, entry.setWeights[i] - step); },
     "set-wt-up": (i) => { entry.setWeights[i] = entry.setWeights[i] + step; }
   };
@@ -3627,7 +3899,10 @@ function renderQuickLogAdd() {
   select.onchange = () => {
     if (!select.value) return;
     const d = getDefaultExercise(select.value);
-    qlEntries.push(qlBuildEntry(d.name, d.sets, d.reps, d.startWeight));
+    qlEntries.push(qlBuildEntry(d.name, d.sets, d.reps, d.startWeight, {
+      day: qlDay,
+      slot: qlSlotFor(d.name)
+    }));
     renderQuickLogList();
     renderQuickLogAdd();
   };
@@ -3696,11 +3971,19 @@ function qlCompleteWorkout() {
   };
 
   qlEntries.forEach(entry => {
-    if (entry.skipped || entry.weight === "") return;
+    if (entry.skipped) return;
+    // Unloaded movements are saveable with no weight; everything else still
+    // needs a load before it counts as logged.
+    const bodyweight = isBodyweight(entry.name);
+    if (!bodyweight && entry.weight === "") return;
+
     const sets = entry.setReps
       .map((reps, i) => ({ weight: entry.setWeights[i], reps }))
-      .filter(s => s.reps > 0)
-      .map(s => ({ weight: String(s.weight), reps: String(s.reps) }));
+      .filter(s => s.reps > 0 && (bodyweight || parseNum(s.weight) > 0))
+      .map(s => ({
+        weight: parseNum(s.weight) > 0 ? String(s.weight) : "",
+        reps: String(s.reps)
+      }));
     if (sets.length) workout.exercises.push({ name: entry.name, sets });
   });
 

@@ -592,6 +592,14 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
   font-family:'DM Mono',monospace;
 }
 
+/* How to enter this movement: per-hand loading, per-side reps, timed holds */
+.exercise-mechanics{
+  color:var(--accent);
+  font-size:.72rem;
+  margin-top:4px;
+  letter-spacing:.02em;
+}
+
 .exercise-body{
   border-top:1px solid var(--border);
   padding:12px;
@@ -1668,6 +1676,14 @@ button.danger{
   color:var(--muted);
   font-size:.78rem;
   font-family:'DM Mono',monospace;
+}
+
+.ql-mechanics{
+  display:block;
+  margin-top:4px;
+  color:var(--accent);
+  font-size:.72rem;
+  letter-spacing:.02em;
 }
 
 .ql-skip{

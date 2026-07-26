@@ -687,6 +687,111 @@ button.mini{min-height:30px;padding:5px 10px;font-size:.78rem}
   margin-top:5px;
 }
 
+.hist-actions{
+  display:flex;
+  gap:6px;
+  flex-shrink:0;
+}
+
+.hist-editor{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid var(--border);
+}
+
+.hist-fields{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.hist-editor label,
+.hist-notes-label{
+  display:block;
+  color:var(--muted);
+  font-size:.74rem;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  margin-bottom:10px;
+}
+
+.hist-editor input,
+.hist-editor select{
+  width:100%;
+  min-height:42px;
+  margin-top:4px;
+  text-transform:none;
+  letter-spacing:normal;
+}
+
+.hist-ex{
+  border:1px solid var(--border);
+  border-radius:11px;
+  padding:10px;
+  margin-bottom:10px;
+  background:rgba(255,255,255,.02);
+}
+
+.hist-ex-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  margin-bottom:8px;
+}
+
+.hist-ex-head strong{font-size:.9rem}
+
+/* Names the two input columns, so a timed hold reads as seconds not reps */
+.hist-ex-units{
+  display:block;
+  color:var(--muted);
+  font-size:.7rem;
+  letter-spacing:.04em;
+  margin-top:2px;
+}
+
+/* set number, weight, reps, remove */
+.hist-set{
+  display:grid;
+  grid-template-columns:22px 1fr 1fr 40px;
+  gap:6px;
+  align-items:center;
+  margin-bottom:6px;
+}
+
+.hist-set input{
+  min-height:40px;
+  margin-top:0;
+}
+
+.hist-set-label{
+  color:var(--muted);
+  font-size:.76rem;
+  text-align:center;
+}
+
+.hist-empty-sets{
+  color:var(--muted);
+  font-size:.78rem;
+  padding:6px 0 8px;
+}
+
+.hist-editor-actions{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:8px;
+  margin-top:12px;
+}
+
+.hist-editor-actions button{min-height:44px}
+
+.hist-more{
+  width:100%;
+  min-height:44px;
+  margin-top:4px;
+}
+
 .empty{
   border:1px dashed var(--border);
   border-radius:13px;
@@ -1686,6 +1791,48 @@ button.danger{
   letter-spacing:.02em;
 }
 
+.ql-card-actions{
+  display:flex;
+  gap:6px;
+  align-items:flex-start;
+  flex-shrink:0;
+}
+
+/* Full-bleed inside the card's 14px padding so the divider meets both edges */
+.ql-edit-drawer{
+  margin:12px -14px 0;
+  padding:12px 14px;
+  border-top:1px solid var(--border);
+  background:rgba(255,255,255,.02);
+}
+
+.ql-edit-drawer select{
+  width:100%;
+  min-height:44px;
+  margin-top:4px;
+}
+
+.ql-edit-buttons{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:10px;
+}
+
+.ql-edit-buttons .ql-remove{
+  grid-column:1 / -1;
+}
+
+.ql-edit-buttons button{
+  min-height:44px;
+}
+
+.ql-edit-buttons button[disabled]{
+  opacity:.4;
+  pointer-events:none;
+}
+
+.ql-edit,
 .ql-skip{
   min-height:40px;
   min-width:64px;

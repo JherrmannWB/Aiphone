@@ -802,16 +802,13 @@ function normalizeExerciseName(name) {
     .trim();
 }
 
+// Exact match on the normalized name, nothing looser. Substring matching used
+// to count too, which merged "Dumbbell Curl" into "Incline Dumbbell Curl" and
+// fed flat-curl history to incline curls. Every modifier in this catalog
+// (incline, machine, cable, seated) names a genuinely different movement, so
+// there is no safe way to treat one name as containing another.
 function namesMatch(a, b) {
-  const aa = normalizeExerciseName(a);
-  const bb = normalizeExerciseName(b);
-  if (aa === bb) return true;
-  // Containment only counts when the contained name is specific enough
-  // (two+ words) — otherwise "curl" would match every curl variant and
-  // rehab movements would inherit heavy-lift history
-  const shorter = aa.length <= bb.length ? aa : bb;
-  const longer = aa.length <= bb.length ? bb : aa;
-  return shorter.split(" ").length >= 2 && longer.includes(shorter);
+  return normalizeExerciseName(a) === normalizeExerciseName(b);
 }
 
 // ==============================
@@ -1697,6 +1694,10 @@ function getQlDraft(day) {
   cloned.entries.forEach(entry => {
     if (!Array.isArray(entry.setWeights)) {
       entry.setWeights = entry.setReps.map(() => entry.weight);
+    }
+    // Drafts written before layout editing existed carry no preset
+    if (entry.startWeight === undefined) {
+      entry.startWeight = EXERCISE_DEFAULTS[entry.name]?.startWeight ?? "";
     }
   });
   return cloned;
@@ -3117,6 +3118,163 @@ function renderTrackerProgress() {
   `;
 }
 
+// Index of the saved workout currently open for editing, and how many rows the
+// list shows before the "show more" toggle
+let historyEditIndex = null;
+let historyLimit = 12;
+
+function toggleHistoryEditor(index) {
+  historyEditIndex = historyEditIndex === index ? null : index;
+  renderHistory();
+}
+
+// Copies whatever is currently typed in the editor back onto the stored
+// workout. Every structural button re-renders the list, so this has to run
+// first or in-progress typing would be thrown away.
+//   prune → drop sets that would not have been accepted by the logging
+//           screens, and exercises left with no sets. Only on an explicit
+//           save; an intermediate read must keep the blank row it just added.
+function readHistoryEditor(index, { prune = false } = {}) {
+  const item = document.querySelector(`.hist-item[data-index="${index}"]`);
+  const workout = state.workouts[index];
+  if (!item || !workout) return false;
+
+  workout.date = item.querySelector(".hist-date").value || workout.date;
+  workout.bodyWeight = item.querySelector(".hist-bw").value.trim();
+  workout.notes = item.querySelector(".hist-notes").value.trim();
+
+  let exercises = [...item.querySelectorAll(".hist-ex")].map(exEl => {
+    const name = exEl.dataset.name;
+    const bodyweight = isBodyweight(name);
+    let sets = [...exEl.querySelectorAll(".hist-set")].map(row => ({
+      weight: row.querySelector(".hist-weight").value.trim(),
+      reps: row.querySelector(".hist-reps").value.trim()
+    }));
+    if (prune) sets = sets.filter(set => set.reps && (bodyweight || set.weight));
+    return { name, sets };
+  });
+  if (prune) exercises = exercises.filter(ex => ex.sets.length);
+
+  workout.exercises = exercises;
+  return true;
+}
+
+// Newest-first is an invariant the whole app leans on — findLastPerformance
+// walks the list in order and stops at the first match — and editing a date
+// can break it, so re-sort whenever one changes. Undated entries sort last,
+// and the sort is stable, so equal dates keep the order they were logged in.
+function sortWorkoutsByDate() {
+  state.workouts.sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date < b.date ? 1 : a.date > b.date ? -1 : 0;
+  });
+}
+
+function saveHistoryEdit(index) {
+  if (!readHistoryEditor(index, { prune: true })) return;
+  sortWorkoutsByDate();
+  historyEditIndex = null;
+  saveState();
+  showToast("Workout updated", "success");
+}
+
+function addHistorySet(index, exIndex) {
+  readHistoryEditor(index);
+  const ex = state.workouts[index]?.exercises?.[exIndex];
+  if (!ex) return;
+  const last = (ex.sets || [])[ex.sets.length - 1];
+  ex.sets = [...(ex.sets || []), { weight: last?.weight ?? "", reps: last?.reps ?? "" }];
+  saveState();
+}
+
+function removeHistorySet(index, exIndex, setIndex) {
+  readHistoryEditor(index);
+  const ex = state.workouts[index]?.exercises?.[exIndex];
+  if (!ex?.sets) return;
+  ex.sets.splice(setIndex, 1);
+  saveState();
+}
+
+function removeHistoryExercise(index, exIndex) {
+  const workout = state.workouts[index];
+  if (!workout?.exercises?.[exIndex]) return;
+  if (!confirm(`Remove ${workout.exercises[exIndex].name} from this session?`)) return;
+  readHistoryEditor(index);
+  state.workouts[index].exercises.splice(exIndex, 1);
+  saveState();
+}
+
+function addHistoryExercise(index, name) {
+  if (!name) return;
+  readHistoryEditor(index);
+  const workout = state.workouts[index];
+  if (!workout) return;
+  const d = getDefaultExercise(name);
+  workout.exercises = [...(workout.exercises || []), {
+    name: d.name,
+    sets: [{ weight: isBodyweight(d.name) ? "" : d.startWeight, reps: String(d.reps) }]
+  }];
+  saveState();
+}
+
+function buildHistoryEditor(workout, index) {
+  const exercises = (workout.exercises || []).map((ex, exIndex) => {
+    const timed = isTimed(ex.name);
+    const bodyweight = isBodyweight(ex.name);
+    const rows = (ex.sets || []).map((set, setIndex) => `
+      <div class="hist-set">
+        <span class="hist-set-label">${setIndex + 1}</span>
+        <input class="hist-weight mono" inputmode="decimal" value="${escapeHtml(set.weight ?? "")}"
+               placeholder="${bodyweight ? "BW" : "lb"}">
+        <input class="hist-reps mono" inputmode="numeric" value="${escapeHtml(set.reps ?? "")}"
+               placeholder="${timed ? "sec" : "reps"}">
+        <button class="ghost mini" type="button" data-rmset="${exIndex}:${setIndex}">✕</button>
+      </div>
+    `).join("");
+
+    return `
+      <div class="hist-ex" data-name="${escapeHtml(ex.name)}">
+        <div class="hist-ex-head">
+          <div>
+            <strong>${escapeHtml(ex.name)}</strong>
+            <span class="hist-ex-units">${bodyweight ? "added lb" : "lb"} · ${timed ? "sec" : "reps"}</span>
+          </div>
+          <button class="ghost mini" type="button" data-rmex="${exIndex}">Remove</button>
+        </div>
+        ${rows || `<div class="hist-empty-sets">No sets left — this movement will drop off when you save.</div>`}
+        <button class="ghost mini" type="button" data-addset="${exIndex}">＋ Add set</button>
+      </div>
+    `;
+  }).join("");
+
+  const options = getDayOptions(workout.name);
+
+  return `
+    <div class="hist-editor">
+      <div class="hist-fields">
+        <label>Date<input class="hist-date" type="date" value="${escapeHtml(workout.date || "")}"></label>
+        <label>Body weight<input class="hist-bw mono" inputmode="decimal" value="${escapeHtml(workout.bodyWeight || "")}" placeholder="205"></label>
+      </div>
+      <label class="hist-notes-label">Notes
+        <input class="hist-notes" value="${escapeHtml(workout.notes || "")}" placeholder="How it felt...">
+      </label>
+      ${exercises || `<div class="hist-empty-sets">No exercises in this session.</div>`}
+      <label class="hist-notes-label">Add exercise
+        <select class="hist-add-ex">
+          <option value="">＋ Pick an exercise…</option>
+          ${options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("")}
+        </select>
+      </label>
+      <div class="hist-editor-actions">
+        <button class="primary" type="button" data-save="${index}">Save Changes</button>
+        <button class="ghost" type="button" data-cancel="${index}">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderHistory() {
   const list = document.getElementById("histList");
   if (!list) return;
@@ -3127,26 +3285,47 @@ function renderHistory() {
     return;
   }
 
-  state.workouts.slice(0, 12).forEach((workout, index) => {
+  state.workouts.slice(0, historyLimit).forEach((workout, index) => {
     const item = document.createElement("div");
     item.className = "hist-item";
+    item.dataset.index = String(index);
 
+    const editing = historyEditIndex === index;
     const exerciseNames = (workout.exercises || []).map(e => escapeHtml(e.name)).slice(0, 3).join(", ");
+    const volume = calcWorkoutVolume(workout);
 
     item.innerHTML = `
       <div class="hist-head">
         <div>
           <strong>${escapeHtml(workout.name)}</strong>
-          <div class="hist-meta">${escapeHtml(workout.date || "")}${workout.bodyWeight ? ` · BW ${escapeHtml(workout.bodyWeight)}` : ""}</div>
+          <div class="hist-meta">${escapeHtml(workout.date || "")}${workout.bodyWeight ? ` · BW ${escapeHtml(workout.bodyWeight)}` : ""}${volume > 0 ? ` · ${Math.round(volume).toLocaleString()} lb` : ""}</div>
+          ${editing ? "" : `
           <div class="history-detail">${exerciseNames}${(workout.exercises || []).length > 3 ? "..." : ""}</div>
           ${workout.focusNotes ? `<div class="history-detail">Focus: ${escapeHtml(workout.focusNotes)}</div>` : ""}
-          ${workout.notes ? `<div class="history-detail">Notes: ${escapeHtml(workout.notes)}</div>` : ""}
+          ${workout.notes ? `<div class="history-detail">Notes: ${escapeHtml(workout.notes)}</div>` : ""}`}
         </div>
-        <button class="ghost mini" type="button" data-del="${index}">Delete</button>
+        <div class="hist-actions">
+          <button class="ghost mini" type="button" data-edit="${index}">${editing ? "Close" : "Edit"}</button>
+          <button class="ghost mini" type="button" data-del="${index}">Delete</button>
+        </div>
       </div>
+      ${editing ? buildHistoryEditor(workout, index) : ""}
     `;
 
     list.appendChild(item);
+  });
+
+  if (state.workouts.length > historyLimit) {
+    const more = document.createElement("button");
+    more.className = "ghost hist-more";
+    more.type = "button";
+    more.textContent = `Show ${Math.min(12, state.workouts.length - historyLimit)} more (${state.workouts.length} total)`;
+    more.onclick = () => { historyLimit += 12; renderHistory(); };
+    list.appendChild(more);
+  }
+
+  list.querySelectorAll("[data-edit]").forEach(btn => {
+    btn.onclick = () => toggleHistoryEditor(Number(btn.dataset.edit));
   });
 
   list.querySelectorAll("[data-del]").forEach(btn => {
@@ -3156,8 +3335,39 @@ function renderHistory() {
       if (!target) return;
       if (!confirm(`Delete "${target.name}"${target.date ? ` from ${target.date}` : ""}? This can't be undone.`)) return;
       state.workouts.splice(idx, 1);
+      // Deleting shifts every later index, so follow the open editor or close it
+      if (historyEditIndex === idx) historyEditIndex = null;
+      else if (historyEditIndex !== null && historyEditIndex > idx) historyEditIndex--;
       saveState();
       showToast("Workout deleted");
+    };
+  });
+
+  list.querySelectorAll("[data-save]").forEach(btn => {
+    btn.onclick = () => saveHistoryEdit(Number(btn.dataset.save));
+  });
+
+  list.querySelectorAll("[data-cancel]").forEach(btn => {
+    btn.onclick = () => { historyEditIndex = null; renderHistory(); };
+  });
+
+  list.querySelectorAll("[data-addset]").forEach(btn => {
+    btn.onclick = () => addHistorySet(historyEditIndex, Number(btn.dataset.addset));
+  });
+
+  list.querySelectorAll("[data-rmset]").forEach(btn => {
+    const [exIndex, setIndex] = btn.dataset.rmset.split(":").map(Number);
+    btn.onclick = () => removeHistorySet(historyEditIndex, exIndex, setIndex);
+  });
+
+  list.querySelectorAll("[data-rmex]").forEach(btn => {
+    btn.onclick = () => removeHistoryExercise(historyEditIndex, Number(btn.dataset.rmex));
+  });
+
+  list.querySelectorAll(".hist-add-ex").forEach(select => {
+    select.onchange = () => {
+      if (!select.value) return;
+      addHistoryExercise(historyEditIndex, select.value);
     };
   });
 }
@@ -3653,13 +3863,19 @@ function qlBuildEntry(name, sets, reps, startWeight = "", options = {}) {
     name,
     weight,
     reps,
+    startWeight,
     setReps: Array.from({ length: Math.max(1, sets) }, () => reps),
     setWeights: Array.from({ length: Math.max(1, sets) }, () => weight),
     skipped: false,
-    lastLabel: last
-      ? `${formatLoggedWeight(name, last.weight)} × ${last.sets.map(s => s.reps).join(" / ")}${last.scope === "day" ? "" : ` · ${last.sourceDay}`}`
-      : ""
+    lastLabel: qlLastLabel(name, last)
   };
+}
+
+function qlLastLabel(name, last) {
+  if (!last) return "";
+  const reps = last.sets.map(s => s.reps).join(" / ");
+  const where = last.scope === "day" ? "" : ` · ${last.sourceDay}`;
+  return `${formatLoggedWeight(name, last.weight)} × ${reps}${where}`;
 }
 
 // Slot of an entry among same-named entries already in the Quick Log list
@@ -3671,9 +3887,79 @@ function qlSlotFor(name, upToIndex = qlEntries.length) {
   return slot;
 }
 
+// Reordering or deleting shifts which slot an entry occupies, so the "last
+// time" line each card shows has to be recomputed against its new position.
+function qlRelabel() {
+  qlEntries.forEach((entry, i) => {
+    const last = findLastPerformance(entry.name, { day: qlDay, slot: qlSlotFor(entry.name, i) });
+    entry.lastLabel = qlLastLabel(entry.name, last);
+  });
+}
+
+// Structural edits made here stick to the day, the same way the Workout
+// Tracker persists its layout. Session-only state (skip, today's loads) is
+// deliberately left out.
+function qlPersistLayout() {
+  if (!qlDay) return;
+  state.customLayouts[qlDay] = qlEntries.map(entry => ({
+    name: entry.name,
+    sets: Math.max(1, entry.setReps.length),
+    reps: entry.reps,
+    startWeight: entry.startWeight || "",
+    collapsed: true
+  }));
+  saveState();
+}
+
+// One open editor at a time keeps the list readable on a phone
+let qlEditingIndex = null;
+
+function qlToggleEditor(index) {
+  qlEditingIndex = qlEditingIndex === index ? null : index;
+  renderQuickLogList();
+}
+
+function qlMoveEntry(index, direction) {
+  const target = index + direction;
+  if (target < 0 || target >= qlEntries.length) return;
+  [qlEntries[index], qlEntries[target]] = [qlEntries[target], qlEntries[index]];
+  qlEditingIndex = target;
+  qlRelabel();
+  qlPersistLayout();
+  persistQlDraft();
+  renderQuickLogList();
+}
+
+function qlRemoveEntry(index) {
+  const entry = qlEntries[index];
+  if (!entry) return;
+  if (!confirm(`Remove ${entry.name} from ${qlDay}?`)) return;
+  qlEntries.splice(index, 1);
+  qlEditingIndex = null;
+  qlRelabel();
+  qlPersistLayout();
+  persistQlDraft();
+  renderQuickLog();
+}
+
+function qlSwapEntry(index, name) {
+  const entry = qlEntries[index];
+  if (!entry || !name || name === entry.name) return;
+  const d = getDefaultExercise(name);
+  qlEntries[index] = qlBuildEntry(d.name, d.sets, d.reps, d.startWeight, {
+    day: qlDay,
+    slot: qlSlotFor(name, index)
+  });
+  qlRelabel();
+  qlPersistLayout();
+  persistQlDraft();
+  renderQuickLog();
+}
+
 function qlLoadDay(day) {
   qlDay = day;
   qlSaved = null;
+  qlEditingIndex = null;
   const draft = getQlDraft(day);
   if (draft) {
     qlEntries = draft.entries;
@@ -3742,6 +4028,7 @@ function qlBuildCard(entry, index) {
   const bodyweight = isBodyweight(entry.name);
   const timed = isTimed(entry.name);
   const note = mechanicsNote(entry.name);
+  const editing = qlEditingIndex === index;
   const repLabel = timed ? "Seconds per set" : "Reps per set";
   const repStep = timed ? 5 : 1;
   const repMax = timed ? 600 : 50;
@@ -3774,8 +4061,25 @@ function qlBuildCard(entry, index) {
         <span class="ql-last">${entry.lastLabel ? `Last: ${escapeHtml(entry.lastLabel)}` : "First log — sets your baseline"}</span>
         ${note ? `<span class="ql-mechanics">${escapeHtml(note)}</span>` : ""}
       </div>
-      <button class="ql-skip" type="button">${entry.skipped ? "Undo" : "Skip"}</button>
+      <div class="ql-card-actions">
+        <button class="ql-edit" type="button">${editing ? "Done" : "Edit"}</button>
+        <button class="ql-skip" type="button">${entry.skipped ? "Undo" : "Skip"}</button>
+      </div>
     </div>
+    ${editing ? `
+    <div class="ql-edit-drawer">
+      <label class="ql-stepper-label" for="qlSwap${index}">Swap exercise</label>
+      <select id="qlSwap${index}" class="ql-swap">
+        ${getDayOptions(qlDay, entry.name)
+          .map(o => `<option value="${escapeHtml(o)}"${o === entry.name ? " selected" : ""}>${escapeHtml(o)}</option>`)
+          .join("")}
+      </select>
+      <div class="ql-edit-buttons">
+        <button class="ghost ql-move-up" type="button"${index === 0 ? " disabled" : ""}>↑ Up</button>
+        <button class="ghost ql-move-down" type="button"${index === qlEntries.length - 1 ? " disabled" : ""}>↓ Down</button>
+        <button class="danger ql-remove" type="button">Remove</button>
+      </div>
+    </div>` : ""}
     <div class="ql-card-body${entry.skipped ? " hidden" : ""}">
       <div class="ql-stepper-row">
         <div class="ql-stepper">
@@ -3808,8 +4112,18 @@ function qlBuildCard(entry, index) {
 
   card.querySelector(".ql-skip").onclick = () => {
     entry.skipped = !entry.skipped;
+    persistQlDraft();
     renderQuickLogList();
   };
+
+  card.querySelector(".ql-edit").onclick = () => qlToggleEditor(index);
+
+  if (editing) {
+    card.querySelector(".ql-swap").onchange = (e) => qlSwapEntry(index, e.target.value);
+    card.querySelector(".ql-move-up").onclick = () => qlMoveEntry(index, -1);
+    card.querySelector(".ql-move-down").onclick = () => qlMoveEntry(index, 1);
+    card.querySelector(".ql-remove").onclick = () => qlRemoveEntry(index);
+  }
 
   const weightInput = card.querySelector('[data-act="wt"]');
   weightInput.onchange = () => {
@@ -3870,8 +4184,12 @@ function qlBuildCard(entry, index) {
 
   card.querySelectorAll(".ql-step").forEach(btn => {
     btn.onclick = () => {
+      const act = btn.dataset.act;
       const setIndex = btn.dataset.set !== undefined ? parseInt(btn.dataset.set, 10) : undefined;
-      actions[btn.dataset.act]?.(setIndex);
+      actions[act]?.(setIndex);
+      // Set count is part of the day's shape, not just today's numbers
+      if (act === "set-up" || act === "set-down") qlPersistLayout();
+      persistQlDraft();
       renderQuickLogList();
     };
   });
@@ -3890,8 +4208,9 @@ function renderQuickLogAdd() {
   const select = document.getElementById("qlAddSelect");
   if (!select) return;
 
-  const existing = new Set(qlEntries.map(e => e.name));
-  const options = getDayOptions(qlDay).filter(name => !existing.has(name));
+  // Duplicates are allowed: a day may run the same lift heavy and then again
+  // as a back-off, and each occupies its own slot with its own history.
+  const options = getDayOptions(qlDay);
 
   select.innerHTML = '<option value="">＋ Pick an exercise…</option>' +
     options.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
@@ -3903,8 +4222,9 @@ function renderQuickLogAdd() {
       day: qlDay,
       slot: qlSlotFor(d.name)
     }));
-    renderQuickLogList();
-    renderQuickLogAdd();
+    qlPersistLayout();
+    persistQlDraft();
+    renderQuickLog();
   };
 }
 

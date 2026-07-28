@@ -3899,15 +3899,23 @@ function qlRelabel() {
 // Structural edits made here stick to the day, the same way the Workout
 // Tracker persists its layout. Session-only state (skip, today's loads) is
 // deliberately left out.
-function qlPersistLayout() {
-  if (!qlDay) return;
-  state.customLayouts[qlDay] = qlEntries.map(entry => ({
+// A substituted entry writes back the row it replaced, not what is on screen —
+// that is what keeps a swap to today's session while reorders and set-count
+// changes around it still stick.
+function qlLayoutRowFor(entry) {
+  if (entry.substitutedFor) return { ...entry.substitutedFor, collapsed: true };
+  return {
     name: entry.name,
     sets: Math.max(1, entry.setReps.length),
     reps: entry.reps,
     startWeight: entry.startWeight || "",
     collapsed: true
-  }));
+  };
+}
+
+function qlPersistLayout() {
+  if (!qlDay) return;
+  state.customLayouts[qlDay] = qlEntries.map(qlLayoutRowFor);
   saveState();
 }
 
@@ -3942,18 +3950,40 @@ function qlRemoveEntry(index) {
   renderQuickLog();
 }
 
+// Swapping is a substitution for today, not a program change. The machine
+// being taken shouldn't rewrite next week's session, so the day's template is
+// left alone until "Keep for next time" is tapped.
 function qlSwapEntry(index, name) {
   const entry = qlEntries[index];
   if (!entry || !name || name === entry.name) return;
+
+  // Remember the template row being stood in for. Swapping A→B→C still points
+  // back at A, because A is what the program actually says.
+  const original = entry.substitutedFor || qlLayoutRowFor(entry);
+
   const d = getDefaultExercise(name);
-  qlEntries[index] = qlBuildEntry(d.name, d.sets, d.reps, d.startWeight, {
+  const next = qlBuildEntry(d.name, d.sets, d.reps, d.startWeight, {
     day: qlDay,
     slot: qlSlotFor(name, index)
   });
+  // Swapping back to the original is not a substitution any more
+  next.substitutedFor = namesMatch(original.name, name) ? null : original;
+  qlEntries[index] = next;
+
   qlRelabel();
-  qlPersistLayout();
   persistQlDraft();
   renderQuickLog();
+}
+
+// Promotes today's substitution into the day's template
+function qlKeepSubstitution(index) {
+  const entry = qlEntries[index];
+  if (!entry?.substitutedFor) return;
+  entry.substitutedFor = null;
+  qlPersistLayout();
+  persistQlDraft();
+  renderQuickLogList();
+  showToast(`${entry.name} saved to ${qlDay}`, "success");
 }
 
 function qlLoadDay(day) {
@@ -4060,6 +4090,7 @@ function qlBuildCard(entry, index) {
         <strong>${escapeHtml(entry.name)}</strong>
         <span class="ql-last">${entry.lastLabel ? `Last: ${escapeHtml(entry.lastLabel)}` : "First log — sets your baseline"}</span>
         ${note ? `<span class="ql-mechanics">${escapeHtml(note)}</span>` : ""}
+        ${entry.substitutedFor ? `<span class="ql-sub-tag">Today only · subbed for ${escapeHtml(entry.substitutedFor.name)}</span>` : ""}
       </div>
       <div class="ql-card-actions">
         <button class="ql-edit" type="button">${editing ? "Done" : "Edit"}</button>
@@ -4074,6 +4105,9 @@ function qlBuildCard(entry, index) {
           .map(o => `<option value="${escapeHtml(o)}"${o === entry.name ? " selected" : ""}>${escapeHtml(o)}</option>`)
           .join("")}
       </select>
+      ${entry.substitutedFor ? `
+      <button class="primary ql-keep" type="button">Keep ${escapeHtml(entry.name)} for next time</button>
+      <p class="ql-keep-note">Otherwise ${escapeHtml(qlDay)} goes back to ${escapeHtml(entry.substitutedFor.name)} next session.</p>` : ""}
       <div class="ql-edit-buttons">
         <button class="ghost ql-move-up" type="button"${index === 0 ? " disabled" : ""}>↑ Up</button>
         <button class="ghost ql-move-down" type="button"${index === qlEntries.length - 1 ? " disabled" : ""}>↓ Down</button>
@@ -4123,6 +4157,8 @@ function qlBuildCard(entry, index) {
     card.querySelector(".ql-move-up").onclick = () => qlMoveEntry(index, -1);
     card.querySelector(".ql-move-down").onclick = () => qlMoveEntry(index, 1);
     card.querySelector(".ql-remove").onclick = () => qlRemoveEntry(index);
+    const keepBtn = card.querySelector(".ql-keep");
+    if (keepBtn) keepBtn.onclick = () => qlKeepSubstitution(index);
   }
 
   const weightInput = card.querySelector('[data-act="wt"]');

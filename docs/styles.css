@@ -1812,6 +1812,31 @@ button.danger{
   margin-top:4px;
 }
 
+/* Marks a swap as standing in for today only */
+.ql-sub-tag{
+  display:inline-block;
+  margin-top:5px;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.03);
+  color:var(--accent);
+  font-size:.7rem;
+  letter-spacing:.02em;
+}
+
+.ql-keep{
+  width:100%;
+  min-height:44px;
+  margin-top:10px;
+}
+
+.ql-keep-note{
+  color:var(--muted);
+  font-size:.72rem;
+  margin:6px 0 0;
+}
+
 .ql-edit-buttons{
   display:grid;
   grid-template-columns:1fr 1fr;
